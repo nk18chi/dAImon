@@ -17,6 +17,19 @@ cd "$(cfg daemon "$SLUG" working_dir)" || cd "$DAIMON_INSTALL_ROOT" || exit 1
 DAEMON_NAME="$SLUG" source "$DAIMON_LIB_DIR/throttle.sh"
 if [ "$SHOULD_SKIP" -eq 1 ]; then log_event "$SLUG" skip "$SKIP_REASON" >> "$OPLOG"; exit 0; fi
 
+# Circuit breaker: after STUCK_CIRCUIT_K consecutive reaped-as-stuck runs, stop
+# launching until a human clears it. A run stalled on an unanswered permission
+# prompt is reaped exactly like any other stall and leaves no state record, so
+# the gate would find the same work and relaunch into the same wall every fire.
+# Deliberately not self-healing — whatever blocked the agent needs a person.
+# `daimon launch <slug>` still bypasses this, and a clean finish resets it.
+# STUCK_CIRCUIT_K comes from common.sh; launch.sh notifies on the same threshold.
+STUCK_FILE="$(stuck_file "$SLUG")"
+if [ "$(cat "$STUCK_FILE" 2>/dev/null || echo 0)" -ge "$STUCK_CIRCUIT_K" ]; then
+  log_event "$SLUG" skip "circuit open: $STUCK_CIRCUIT_K consecutive stuck runs; not launching. Clear with: rm $STUCK_FILE" >> "$OPLOG"
+  exit 0
+fi
+
 DAEMON_NAME="$SLUG" source "$DAIMON_LIB_DIR/inbox.sh"
 if [ "${HAS_INBOX_MESSAGES:-0}" -gt 0 ]; then
   log_event "$SLUG" inbox "$HAS_INBOX_MESSAGES message(s); launching" >> "$OPLOG"

@@ -1,0 +1,11 @@
+# Copy to profile.local.toml (gitignored). Shared by every daemon on the mongodb
+# source, so the Atlas project/cluster is set once here rather than per daemon.
+[defaults]
+# Atlas project (group) id — the hex id in the cloud.mongodb.com/v2/<id> URL.
+atlas_project_id = "000000000000000000000000"
+# Cluster name as it appears in Atlas.
+cluster_name = "Cluster0"
+
+# Credentials are NOT stored here. The gate resolves an Atlas service account from
+# $ATLAS_CLIENT_ID/$ATLAS_CLIENT_SECRET, then ~/.config/daimon/atlas.env, then the
+# MongoDB MCP server's own configuration. See profiles/mongodb/lib.sh.

@@ -125,14 +125,32 @@ run_one_backend() {
   fi
 
   while true; do
-    if [ "$mode" = "hook" ] && [ -f "$SENTINEL" ]; then log_event "$SLUG" "done" "sentinel backend=$be" >> "$OPLOG"; break; fi
+    if [ "$mode" = "hook" ] && [ -f "$SENTINEL" ]; then
+      # A clean finish clears the circuit breaker; only consecutive stucks trip it.
+      rm -f "$(stuck_file "$SLUG")"
+      log_event "$SLUG" "done" "sentinel backend=$be" >> "$OPLOG"; break
+    fi
     tmux has-session -t "$session" 2>/dev/null || { log_event "$SLUG" "done" "session ended backend=$be" >> "$OPLOG"; break; }
     local hb_mtime hb_age
     hb_mtime=$(stat -f %m "$HEARTBEAT" 2>/dev/null || now_epoch)
     hb_age=$(( $(now_epoch) - hb_mtime ))
     if [ "$hb_age" -ge "$STUCK_AFTER" ]; then
       if [ "$mode" = "idle" ]; then log_event "$SLUG" "done" "idle ${hb_age}s backend=$be" >> "$OPLOG"
-      else log_event "$SLUG" stuck "no activity ${hb_age}s backend=$be" >> "$OPLOG"; fi
+      else
+        # Count consecutive stucks so run.sh can stop relaunching into the same
+        # wall — an unanswered permission prompt looks exactly like this and
+        # would otherwise repeat every fire, forever.
+        local sf n
+        sf="$(stuck_file "$SLUG")"
+        n=$(( $(cat "$sf" 2>/dev/null || echo 0) + 1 ))
+        echo "$n" > "$sf"
+        log_event "$SLUG" stuck "no activity ${hb_age}s backend=$be consecutive=$n" >> "$OPLOG"
+        # Alert once, on the run that trips it — not on every later skip, which
+        # would be a notification every fire for as long as it stays open.
+        if [ "$n" -eq "$STUCK_CIRCUIT_K" ]; then
+          notify "dAImon: $SLUG stopped — $n consecutive stuck runs, no longer launching. Clear with: rm $sf"
+        fi
+      fi
       break
     fi
     sleep 15

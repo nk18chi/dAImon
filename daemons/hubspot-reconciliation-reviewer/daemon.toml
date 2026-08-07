@@ -1,0 +1,55 @@
+[daemon]
+backend = "claude"
+# 09:00 Pacific on weekdays. launchd fires on LOCAL time and follows DST, and this
+# machine runs Pacific, so a bare "09:00" is already Pacific year-round.
+# The property reconciliation workflow runs once a day and stamps its runId with
+# the date (hubspot-property-reconciliation-YYYY-MM-DD); observed completion is
+# ~08:30 UTC / ~01:30 PT, so 09:00 PT always sees a finished report. A tighter
+# cadence only rediscovers the same day's clusters.
+schedule = { at = ["09:00"], days = "mon-fri" }
+command = "/hubspot-reconciliation-reviewer"
+stuck_after = 1800
+required_inputs = ["log_query", "lookback"]
+# Reads Datadog reconciliation drift logs and production Mongo (read-only) to
+# establish root cause, writes Shortcut stories.
+#
+# `sources` declares the dependency and injects each profile's reference.md into
+# the rendered skill — it does NOT provision MCP servers (mcp-config is empty for
+# this daemon and for mongo-slow-query-reviewer alike). The Datadog and MongoDB
+# MCP servers come from the operator's own Claude Code config, so the skill must
+# tolerate their absence in an unattended run; see "Investigate" in SKILL.md.
+# mongodb is declared for the connection context, not for Query Shape Insights,
+# which this daemon does not use.
+sources = ["datadog", "mongodb", { name = "shortcut", write = true }]
+
+[inputs]
+# Structured drift events emitted by logDriftedRecordsForSummary in
+# reconcileHubSpotProperties.activity.ts. Scoped to the production worker:
+# @hubspotEnvironment is NOT present on these events (it is only on the run
+# summary), so @dd.service is the only environment filter available.
+log_query = "@event:hubspot.property_reconciliation.drifted_record @dd.service:temporal-worker-production"
+# One full day plus margin, so a late-running workflow is still caught.
+lookback = "30h"
+# Prefix on every Shortcut story this daemon creates, so its stories are
+# identifiable and reply/triage daemons can tell them apart.
+bot_marker = "🤖"
+# Most new clusters to file in a single run. Drift is bursty — 830 records in one
+# day on 2026-07-30 against single digits either side — so the cap matters even
+# though clustering already collapses ~1000 records into a handful of stories.
+max_new_stories = 3
+# Labels stamped on every story, comma-separated. Exact strings: the workspace
+# holds 265 labels and near-miss spellings silently create new ones.
+story_labels = "crm-data-discrepancy"
+# Existing stories in this class use bug branches (naokimita/bug/sc-51424/...).
+story_type = "bug"
+# 👥 CRM - Post Launch. Pinned rather than inferred — an inferred epic drifts
+# between runs and scatters the backlog.
+epic_id = "46244"
+# Squad 3 - BAR, which owns epic 46244.
+team = "686d63b1-4750-4b66-b819-2da4ac86d332"
+# Overrides the fleet default ("To Do" in profiles/shortcut/profile.toml).
+# CONSEQUENCE: story-reviewer's gate matches on the fleet triage state, so stories
+# filed here are NOT auto-triaged into work-queue. That is deliberate — deciding
+# whether Mongo or HubSpot is authoritative for a drifted field is a human call,
+# not something to hand to an autonomous implementer.
+triage_state = "Backlog"

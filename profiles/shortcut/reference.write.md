@@ -3,6 +3,14 @@
 These operations **change** stories. They apply only to daemons that triage or
 implement stories; a read-only daemon never uses them.
 
+**Prefer the Shortcut MCP tools when the session has them** (`mcp__shortcut__*`:
+`stories-search`, `stories-create`, `stories-update`, `stories-create-comment`,
+`stories-get-by-id`, `workflows-list`, …). They need no shell, no `$TOKEN`
+handling, and no command substitution — in non-danger sessions the curl recipes
+below stall on interactive approval (env expansions are never auto-allowed),
+while the MCP tools run clean. Use curl only as the fallback when the MCP
+server is unavailable.
+
 Assessment is conveyed by **labels** (visible as chips in Shortcut), not by moving
 the story:
 
@@ -89,6 +97,23 @@ the id for `{{inputs.triage_state}}` from `GET /api/v3/workflows`). Leave off an
 assessment label so a triage daemon still picks it up. When `{{inputs.epic_id}}`
 is non-empty, set `epic_id` to it so filed stories group under that epic. Set
 `group_id`/`team` and `requested_by_id` if your workflow needs them.
+
+Three more fields are worth setting when your daemon knows them:
+
+- `story_type` — `"feature"`, `"bug"`, or `"chore"`. Defaults to `feature`, which
+  is wrong for maintenance work; set it explicitly.
+- `labels` — an array of `{"name": "..."}`. Categorization labels are fine here;
+  assessment labels are not (see above). **Match existing label names exactly** —
+  `GET /api/v3/labels` first if unsure. Shortcut creates a label silently on any
+  name it doesn't recognize, so a typo produces a near-duplicate rather than an
+  error, and the stories filed under it vanish from the real label's reports.
+- `estimate` — an integer in the workspace's point scale. Omit it rather than
+  guessing; an absent estimate is honest, a wrong one is misleading.
+
+```json
+{"name":"…","description":"…","workflow_state_id":123,
+ "story_type":"chore","labels":[{"name":"perf-database"}],"estimate":2}
+```
 
 ```bash
 STATE=$(curl -s https://api.app.shortcut.com/api/v3/workflows -H "Shortcut-Token: $TOKEN" \

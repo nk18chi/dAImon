@@ -19,17 +19,3 @@ gh_pr_count() {
 gh_search_pr_count() {
   gh search prs "$@" --json number --jq 'length' 2>/dev/null || echo 0
 }
-
-# load_seen_state <state-file-path> -> the file's JSON array on stdout, or [] if
-# the file is missing or not valid JSON. A daemon's skill writes this record; the
-# gate reads it to skip work already handled.
-load_seen_state() {
-  local f="$1" contents
-  [ -f "$f" ] || { printf '[]'; return; }
-  contents="$(cat "$f")"
-  if printf '%s' "$contents" | jq empty 2>/dev/null; then
-    printf '%s' "$contents"
-  else
-    printf '[]'
-  fi
-}

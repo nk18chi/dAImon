@@ -40,7 +40,7 @@ else
 fi
 
 echo "daemons"
-needs_shortcut=0; needs_codex=0; needs_datadog=0
+needs_shortcut=0; needs_codex=0; needs_datadog=0; needs_mongodb=0; needs_acr=0; acr_dirs=""
 for slug in $(cfg daemons); do
   wd="$(cfg daemon "$slug" working_dir)"
   wd_configured="$(cfg daemon "$slug" working_dir_configured)"
@@ -51,6 +51,11 @@ for slug in $(cfg daemons); do
   srcs=" $(cfg daemon "$slug" sources 2>/dev/null) "
   case "$srcs" in *" shortcut "*) needs_shortcut=1 ;; esac
   case "$srcs" in *" datadog "*) needs_datadog=1 ;; esac
+  case "$srcs" in *" mongodb "*) needs_mongodb=1 ;; esac
+  # ACR has to be watching this daemon's repo or no verdict ever appears there;
+  # keep the dirs so the acr block below can check each one by name.
+  case "$srcs" in *" acr "*) needs_acr=1; acr_dirs="$acr_dirs$wd
+" ;; esac
   case " $be $(cfg daemon "$slug" mcp 2>/dev/null) " in *" codex "*) needs_codex=1 ;; esac
   msg="$slug"
   if [ "$wd_configured" != "1" ]; then
@@ -95,6 +100,40 @@ if [ "$needs_datadog" = 1 ]; then
     fi
   else
     warn "pup not installed (make tooling, or brew install datadog-labs/pack/pup) — datadog daemons never fire"
+  fi
+fi
+
+if [ "$needs_mongodb" = 1 ]; then
+  echo "mongodb"
+  source "$DAIMON_INSTALL_ROOT/profiles/mongodb/lib.sh"
+  if [ -z "$(atlas_creds)" ]; then
+    warn "no Atlas service account (\$ATLAS_CLIENT_ID/\$ATLAS_CLIENT_SECRET, ~/.config/daimon/atlas.env, or the MongoDB MCP server) — mongodb gate fails closed, so the daemon never fires"
+  elif [ -n "$(atlas_token)" ]; then
+    ok "Atlas service account authenticates"
+  else
+    warn "Atlas service account found but the token exchange failed (expired or revoked key?) — mongodb gate fails closed"
+  fi
+fi
+
+if [ "$needs_acr" = 1 ]; then
+  echo "acr"
+  source "$DAIMON_INSTALL_ROOT/profiles/acr/lib.sh"
+  if [ "$(acr_config)" = "{}" ]; then
+    warn "no ACR config (~/.acr/config.json) — nothing posts review verdicts, so the acr gate never fires"
+  else
+    while IFS= read -r d; do
+      [ -n "$d" ] || continue
+      nwo="$(acr_repo_nwo "$d")"
+      if [ -z "$nwo" ]; then
+        warn "$d: no git origin — cannot confirm ACR reviews it"
+      elif acr_watches "$nwo"; then
+        ok "ACR reviews $nwo"
+      else
+        warn "ACR does not list $nwo in ~/.acr/config.json — no verdict is ever posted there, so the acr gate never fires"
+      fi
+    done <<EOF
+$acr_dirs
+EOF
   fi
 fi
 

@@ -7,23 +7,6 @@ setup() {
   source "$ROOT/profiles/github/lib.sh"
 }
 
-@test "load_seen_state: missing file -> []" {
-  run load_seen_state "$BATS_TEST_TMPDIR/nope.json"
-  [ "$output" = "[]" ]
-}
-
-@test "load_seen_state: invalid json -> []" {
-  printf 'not json {' > "$BATS_TEST_TMPDIR/s.json"
-  run load_seen_state "$BATS_TEST_TMPDIR/s.json"
-  [ "$output" = "[]" ]
-}
-
-@test "load_seen_state: valid json -> contents" {
-  printf '[{"number":1,"headSha":"abc"}]' > "$BATS_TEST_TMPDIR/s.json"
-  run load_seen_state "$BATS_TEST_TMPDIR/s.json"
-  [ "$output" = '[{"number":1,"headSha":"abc"}]' ]
-}
-
 @test "gh_pr_json: gh failure -> []" {
   gh() { return 1; }
   run gh_pr_json --state open

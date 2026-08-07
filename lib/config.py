@@ -408,8 +408,10 @@ def validate(cfg: Config) -> list[str]:
     return errors
 
 
-def daemon_schema() -> dict:
-    schedule = {
+def schedule_schema() -> dict:
+    """The four schedule shapes. Kept beside daemon_schema rather than inside it —
+    it is the part that grows, and schedule_fmt.py must stay in step with it."""
+    return {
         "type": "object",
         "oneOf": [
             {
@@ -423,7 +425,8 @@ def daemon_schema() -> dict:
                     "minutes": {
                         "type": "array",
                         "items": {"type": "integer", "minimum": 0, "maximum": 59},
-                    }
+                    },
+                    "days": {"enum": ["all", "mon-fri", "sat-sun"]},
                 },
                 "additionalProperties": False,
             },
@@ -435,8 +438,27 @@ def daemon_schema() -> dict:
                 },
                 "additionalProperties": False,
             },
+            {
+                "required": ["at"],
+                "properties": {
+                    "at": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "string",
+                            "pattern": r"^[0-9]{1,2}:[0-9]{2}$",
+                        },
+                    },
+                    "days": {"enum": ["all", "mon-fri", "sat-sun"]},
+                },
+                "additionalProperties": False,
+            },
         ],
     }
+
+
+def daemon_schema() -> dict:
+    schedule = schedule_schema()
     daemon = {
         "type": "object",
         "required": ["command", "schedule"],

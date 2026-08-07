@@ -1,0 +1,8 @@
+# Copy to daemon.local.toml (gitignored) and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose queries this daemon traces to source
+
+[inputs]
+# Only needed if not already set in profiles/mongodb/profile.local.toml.
+atlas_project_id = "000000000000000000000000"
+cluster_name = "Cluster0"

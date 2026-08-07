@@ -1,0 +1,11 @@
+[profile]
+tool = "acr"
+description = "ACR automated-code-review findings on GitHub PRs, via the acr:v1 comment contract"
+
+[defaults]
+# The line-1 envelope marker every ACR contract comment carries. Bump only when
+# ACR ships a breaking contract version (acr:v2) and this profile is updated for it.
+acr_version = "acr:v1"
+# The contract ACR renders its comments against. Read it when a payload field is
+# unfamiliar — the envelope's own schema_url points at the same document.
+acr_schema_url = "https://github.com/toursbylocals/acr/blob/main/docs/agent-comment-contract.md"

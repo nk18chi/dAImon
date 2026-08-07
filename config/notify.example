@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Optional out-of-band alerting for dAImon. Copy to ~/.config/daimon/notify and
+# `chmod +x` it; anything not executable is ignored. Receives one argument: the
+# message. Fired where a human would otherwise never learn something stopped —
+# today, only when a daemon's circuit breaker opens after consecutive stuck runs.
+#
+# launchd forwards only PATH, HOME and SSH_AUTH_SOCK and does NOT read your shell
+# profile, so a token exported in .zshrc will not reach this script. Read secrets
+# from a file under $HOME instead, as below.
+set -uo pipefail
+msg="${1:-dAImon notification}"
+
+# --- Slack ------------------------------------------------------------------
+# Put an incoming-webhook URL in ~/.config/daimon/slack-webhook (chmod 600).
+# Persists in a channel, so a 3am alert is still there at 9am — unlike a banner.
+hook_file="$HOME/.config/daimon/slack-webhook"
+if [ -r "$hook_file" ]; then
+  url="$(cat "$hook_file")"
+  payload="$(printf '{"text":%s}' "$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/')")"
+  curl -fsS -m 10 -X POST -H 'Content-type: application/json' -d "$payload" "$url" >/dev/null 2>&1
+fi
+
+# --- macOS banner -----------------------------------------------------------
+# Immediate but transient: it disappears from Notification Centre and is useless
+# for anything that fires while you are asleep. Keep it as a local echo, not as
+# your only channel.
+if command -v osascript >/dev/null 2>&1; then
+  osascript -e "display notification \"${msg//\"/\\\"}\" with title \"dAImon\"" >/dev/null 2>&1
+fi
+
+exit 0

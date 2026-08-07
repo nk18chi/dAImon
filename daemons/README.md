@@ -4,8 +4,11 @@
 
 | Daemon | Schedule | Description |
 |--------|----------|-------------|
+| [acr-fixer](acr-fixer/) | :5,25,45 mon-fri | Close out ACR review findings on your open PRs — fix each one on the PR branch, reply through the ACR protocol, and push so the next review round verifies the work. |
 | [datadog-log-reviewer](datadog-log-reviewer/) | 1800s | Review recent Datadog error logs, cluster them by root cause, and file one Shortcut story per new cluster for triage. |
 | [dependency-reviewer](dependency-reviewer/) | :13,43 | Triage dependency-bot PRs — auto-merge only low-risk bumps, and leave everything risky with a summary for a human. |
+| [hubspot-reconciliation-reviewer](hubspot-reconciliation-reviewer/) | 09:00 mon-fri | Review the daily HubSpot property reconciliation drift report, cluster it by mapper field, and file one Shortcut story per new cluster. |
+| [mongo-slow-query-reviewer](mongo-slow-query-reviewer/) | 09:00,16:00 mon-fri | Review MongoDB Atlas query shapes, find the ones costing the most execution time, and file one Shortcut story per new offender with a proposed index or rewrite. |
 | [pr-manager](pr-manager/) | :3,23,43 | Shepherd your open pull requests to merge — merge approved ones, resolve conflicts, fix failing CI, and address change requests. |
 | [reply-to-pr-comments](reply-to-pr-comments/) | :17,47 | Respond to replies on your bot comments on GitHub PRs, and re-trigger review when feedback is addressed. |
 | [reply-to-story-comments](reply-to-story-comments/) | :17,47 | Respond to human replies on your bot comments on Shortcut stories, and re-trigger triage when an awaiting-input question is answered. |

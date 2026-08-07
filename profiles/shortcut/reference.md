@@ -1,6 +1,8 @@
 ## Source: Shortcut
 
-Work items are Shortcut **stories**. Talk to Shortcut over its REST API
+Work items are Shortcut **stories**. Prefer the Shortcut MCP tools when the
+session has them (`mcp__shortcut__stories-search`, `stories-get-by-id`, …) —
+no shell or token handling needed. Fallback: the REST API
 (`https://api.app.shortcut.com/api/v3`). The API token is in `$SHORTCUT_API_TOKEN`,
 else `~/.config/shortcut-cli/config.json` (`token` field); send it as the
 `Shortcut-Token` header. Verify exact field names/ids against API responses — do

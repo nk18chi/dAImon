@@ -64,6 +64,24 @@ case "$(backend_cli_args opus 1 sess)" in *"--mcp-config $TMP/mcp.json --strict-
 check "$mcp" "1" "claude backend appends --mcp-config + --strict when set"
 unset DAIMON_MCP_CONFIG
 
+# Without danger the mode must be pinned on the CLI. Inheriting the user default
+# means `manual`, which stalls an unattended run on its first write; a project
+# settings file cannot fix that, because defaultMode is honoured from user/policy
+# settings only.
+case "$(backend_cli_args opus 0 sess)" in *"--permission-mode auto"*) pm=1;; *) pm=0;; esac
+check "$pm" "1" "claude backend pins --permission-mode auto when danger is off"
+case "$(backend_cli_args opus 1 sess)" in *"--dangerously-skip-permissions"*) pm=1;; *) pm=0;; esac
+check "$pm" "1" "claude backend uses --dangerously-skip-permissions when danger is on"
+case "$(backend_cli_args opus 1 sess)" in *"--permission-mode"*) pm=1;; *) pm=0;; esac
+check "$pm" "0" "claude backend does not pass both permission flags"
+# The footer names the active mode, so pinning `auto` changes the text the
+# launcher waits for. A miss here costs a full ready_timeout and a boot_fail with
+# no command ever sent, which looks exactly like a dead agent.
+ready_re="$(backend_ready_regex 0)"
+footer="⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
+if [[ "$footer" =~ $ready_re ]]; then pm=1; else pm=0; fi
+check "$pm" "1" "ready regex matches the auto-mode footer"
+
 export DAIMON_D_WORKING_DIR="/tmp/x.y/repo"
 source "$ROOT/backends/codex.sh"
 check "$(backend_completion_mode)" "oneshot" "codex backend is oneshot"

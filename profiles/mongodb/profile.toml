@@ -1,0 +1,35 @@
+[profile]
+tool = "mongodb"
+description = "MongoDB Atlas query performance via Query Shape Insights"
+
+[defaults]
+# Atlas project (group) id and cluster name this source reads. Both are
+# account-specific — set them in profiles/mongodb/profile.local.toml (shared by
+# every mongodb daemon) or in a daemon's daemon.local.toml.
+atlas_project_id = ""
+cluster_name = ""
+# Rolling window each run analyses, in hours. Query Shape Insights aggregates over
+# this window, so it also sets what "total execution time" means. 24h keeps the
+# ranking stable between runs while a 30-minute schedule still surfaces a
+# newly-deployed bad query within one tick.
+lookback_hours = 24
+
+# --- Candidate thresholds -----------------------------------------------------
+# A shape is a candidate when it trips ANY of the four. They are deliberately
+# OR'd, not AND'd: on a real cluster they select near-disjoint sets, so chaining
+# them silently hides the worst offenders.
+#   avg       — rare, individually heavy queries (often analytics or one-off scans).
+#   total     — frequent, moderately-slow queries. These dominate aggregate cluster
+#               load and are what users actually feel, yet almost none of them trip
+#               the avg threshold: a 380ms query run 1,350 times costs 8.6 minutes.
+#   ratio     — docs examined per doc RETURNED. Measures waste: the classic
+#               missing-index signal, visible before a query is slow enough to
+#               trip either timer. Only applied where it is meaningful — see below.
+#   per_exec  — docs examined per EXECUTION. Measures absolute scan cost, and is
+#               always well defined. Catches shapes the ratio hides: a query
+#               reading 124k docs per run at a healthy-looking 3:1 ratio trips
+#               nothing else until it gets slow.
+avg_ms_threshold = 3000
+total_ms_threshold = 120000
+examined_ratio_threshold = 1000
+docs_per_exec_threshold = 1000

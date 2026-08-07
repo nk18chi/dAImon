@@ -1,10 +1,14 @@
 ## Source: Datadog
 
-Observability data is in **Datadog**. Query it with the `pup` CLI, which
-authenticates from `$HOME` (run `pup auth login` once) or from
-`DD_API_KEY`/`DD_APP_KEY`; site comes from `DD_SITE` (`{{inputs.dd_site}}`).
-Prefer `--output json` and parse the `data` array — verify field names against a
-real response, do not assume them.
+Observability data is in **Datadog**. **Prefer the Datadog MCP tools when the
+session has them** (`mcp__datadog-mcp__*`: `search_datadog_logs`,
+`analyze_datadog_logs`, `aggregate_events`, `search_datadog_spans`,
+`get_datadog_trace`, …) — no shell, no credential handling, and they support
+richer enrichment (occurrence trends, companion events, traces) than a raw log
+dump. Fallback: the `pup` CLI, which authenticates from `$HOME` (run
+`pup auth login` once) or from `DD_API_KEY`/`DD_APP_KEY`; site comes from
+`DD_SITE` (`{{inputs.dd_site}}`). Prefer `--output json` and parse the `data`
+array — verify field names against a real response, do not assume them.
 
 ### Search logs
 

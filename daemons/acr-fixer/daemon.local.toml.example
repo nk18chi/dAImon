@@ -1,0 +1,10 @@
+# Copy to daemon.local.toml (gitignored) and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose ACR-reviewed PRs this daemon fixes
+
+[inputs]
+# Raise once you trust the loop; lower to keep a human in it sooner.
+max_rounds = 5
+# Path to your ACR checkout, for re-triggering your own instance after a push.
+# Blank skips that step (other reviewers are still re-requested via gh).
+acr_repo = "~/code/acr"

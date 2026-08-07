@@ -1,0 +1,36 @@
+[daemon]
+backend = "claude"
+# Twice a day on weekdays, 09:00 and 16:00 local. Query Shape Insights aggregates
+# over a 24h window and moves slowly, so a tighter cadence mostly rediscovers
+# shapes already filed. launchd fires on LOCAL time and follows DST.
+schedule = { at = ["09:00", "16:00"], days = "mon-fri" }
+command = "/mongo-slow-query-reviewer"
+stuck_after = 1800
+required_inputs = ["atlas_project_id", "cluster_name"]
+# Reads Atlas Query Shape Insights, writes Shortcut stories. A new story in the
+# triage state is picked up by story-reviewer automatically, closing the loop into
+# work-queue — the same path datadog-log-reviewer uses for errors.
+sources = ["mongodb", { name = "shortcut", write = true }]
+
+[inputs]
+# Prefix on every Shortcut story this daemon creates, so its stories are
+# identifiable and reply/triage daemons can tell them apart.
+bot_marker = "🤖"
+# Most new query shapes to file as stories in a single run, highest total
+# execution time first. Caps the blast radius of a bad deploy that introduces
+# several slow shapes at once; the rest wait for the next run.
+max_new_stories = 3
+# Namespaces to ignore entirely, comma-separated (substring match on
+# "db.collection"). Use for collections whose slowness is known and accepted —
+# batch jobs, migrations, analytics scratch space.
+ignore_namespaces = ""
+# Labels stamped on every story this daemon files, comma-separated. These are
+# categorization labels, NOT the ai-ready/ai-assist assessment labels — the daemon
+# must still leave assessment to story-reviewer.
+story_labels = "perf-database"
+# Tracker work-item type for filed stories. Performance work is maintenance, not
+# new capability, so it lands as a chore.
+story_type = "chore"
+# Epic filed stories group under. Pinned rather than left to the agent to infer —
+# an inferred epic can drift between runs, scattering the backlog.
+epic_id = "47834"
