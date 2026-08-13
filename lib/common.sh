@@ -26,6 +26,22 @@ runtime_dir()     { echo "$DAIMON_STATE_DIR/runtime"; }
 # Consecutive-stuck counter for the launch circuit breaker. Written by launch.sh,
 # read by run.sh, cleared by deleting the file.
 stuck_file()      { echo "$DAIMON_STATE_DIR/runtime/$1.stuck"; }
+# Per-item overrides of a daemon's round cap, as {"<item>": <max>}. Machine-local
+# and set by hand — the point is to loosen the cap on one PR while you are
+# watching it, without raising it for everything overnight.
+round_caps_file() { echo "$DAIMON_STATE_DIR/runtime/$1.round-caps.json"; }
+# Per-item exclusions, as {"<item>": true}. The counterpart to a repo-side opt-out
+# label: same effect, but it stays on this machine and needs no write access to
+# anything shared. A daemon that reads one should honour both.
+skips_file()      { echo "$DAIMON_STATE_DIR/runtime/$1.skips.json"; }
+
+# load_json_object <path> -> the file's JSON object on stdout, or {} when the
+# file is missing, unreadable, or not an object. The object counterpart to
+# load_seen_state, whose {} is [].
+load_json_object() {
+  [ -f "$1" ] || { printf '{}'; return; }
+  jq -c 'if type == "object" then . else {} end' "$1" 2>/dev/null || printf '{}'
+}
 # Consecutive stuck runs that open the breaker. Shared so launch.sh notifies on
 # the same threshold run.sh refuses to launch on.
 STUCK_CIRCUIT_K=2
@@ -55,14 +71,18 @@ ensure_state_dirs() {
 # reads it to skip work already handled. Source-agnostic, so it lives here next to
 # state_file() rather than in any one profile.
 load_seen_state() {
-  local f="$1" contents
+  local f="$1"
   [ -f "$f" ] || { printf '[]'; return; }
-  contents="$(cat "$f")"
-  if printf '%s' "$contents" | jq empty 2>/dev/null; then
-    printf '%s' "$contents"
-  else
-    printf '[]'
-  fi
+  # Always hand back a FLAT ARRAY of records. A skill may keep one list or
+  # several — acr-fixer writes {"rounds": [...], "watermarks": [...]} — and a
+  # gate that iterates the object instead gets its two arrays as elements, so
+  # every `.number` lookup silently misses and nothing is ever deduped. The
+  # framework does not dictate the file's shape, so it normalises here instead.
+  jq -c '
+    if type == "array" then .
+    elif type == "object" then ([ .[] | select(type == "array") ] | add // [])
+    else [] end
+  ' "$f" 2>/dev/null || printf '[]'
 }
 
 now_epoch() { date +%s; }

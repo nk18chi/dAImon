@@ -27,6 +27,8 @@ usage: daimon <command> [args]
   sync               regenerate plists + render skills
   daemons            list discovered daemons
   state <slug>       show a daemon's work-tracking record (--clear to reset)
+  rounds <slug>      per-item round-cap overrides (<item> <max> to set)
+  skip <slug>        per-item exclusions (<item> to add, --clear to undo)
   models <backend>   list available models (claude|codex)
   config <args...>   pass through to the config core (validate|get|daemon|...)
   validate           validate configuration
@@ -48,6 +50,8 @@ case "$CMD" in
   sync)      exec python3 -m daimon.sync "$@" ;;
   daemons)   exec python3 "$LIB/config.py" daemons ;;
   state)     exec bash "$LIB/state-show.sh" "$@" ;;
+  rounds)    exec bash "$LIB/round-caps.sh" "$@" ;;
+  skip)      exec bash "$LIB/skips.sh" "$@" ;;
   models)    exec python3 "$LIB/models.py" "$@" ;;
   config)    exec python3 "$LIB/config.py" "$@" ;;
   validate)  exec python3 "$LIB/config.py" validate ;;

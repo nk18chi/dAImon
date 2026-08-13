@@ -84,6 +84,12 @@ acr_latest_rounds() {
 # goes quiet until an instance re-reviews the new commit. A PR is actionable
 # when at least one reviewer has an open, unhandled round — so one pass can
 # clear findings raised by several instances at once.
+#
+# A `parked` row does not count as seen. Parking means the round-cap stopped the
+# work, not that it was done, and the cap is re-evaluated downstream by
+# acr_under_round_cap. Were a park to dedup its own round, raising that PR's cap
+# would do nothing until a new head arrived — the round would stay suppressed by
+# the record of having been refused.
 acr_actionable_prs() {
   local prs="$1" seen="${2:-[]}" out='[]' num head hit
   while IFS=$'\t' read -r num head; do
@@ -98,6 +104,7 @@ acr_actionable_prs() {
             | select(. as $r | ($seen | any(
                 (.number? == $n) and (.headSha? == $head)
                 and (.reviewer? == $r.reviewer) and (.round? == $r.round)
+                and (.outcome? != "parked")
               )) | not)
           ] as $open
         | if ($open | length) > 0
@@ -117,14 +124,193 @@ acr_actionable_count() {
   acr_actionable_prs "$1" "${2:-[]}" | jq 'length' 2>/dev/null || echo 0
 }
 
-# acr_under_round_cap <actionable-json> <max-round> -> the same array with PRs
-# whose every open round is past the cap dropped ([] on failure). The cap is per
-# reviewer: an instance stuck at round 9 is parked, but a second instance's round
-# 1 on the same PR is fresh work and still keeps that PR in scope.
+# acr_under_round_cap <actionable-json> <max-round> [overrides-json] -> the same
+# array with PRs whose every open round is past the cap dropped ([] on failure).
+#
+# The cap is per reviewer: an instance stuck at round 9 is parked, but a second
+# instance's round 1 on the same PR is fresh work and still keeps that PR in
+# scope.
+#
+# <overrides-json> holds hand-set caps for PRs being watched, so one can be
+# carried further without loosening the default for everything running
+# unattended. Two key shapes, most specific first:
+#
+#   {"5175:nk18chi": 12}   this reviewer on this PR
+#   {"5175": 10}           every reviewer on this PR
+#
+# The reviewer-level key exists because the cap is per reviewer: your own
+# instance being nine rounds deep says nothing about a colleague's that has just
+# opened its first.
 acr_under_round_cap() {
-  printf '%s' "$1" | jq -c --argjson max "${2:-0}" '
-    [ .[] | select([ .rounds[]? | select(.round <= $max) ] | length > 0) ]
+  local caps="${3:-}"
+  [ -n "$caps" ] || caps='{}'
+  printf '%s' "$1" | jq -c --argjson max "${2:-0}" --argjson caps "$caps" '
+    [ .[]
+      | (.number | tostring) as $n
+      | select([ .rounds[]?
+                 | . as $r
+                 | (($caps[$n + ":" + ($r.reviewer // "")])
+                    // ($caps[$n]) // $max) as $limit
+                 | select($r.round <= $limit) ] | length > 0) ]
   ' 2>/dev/null || printf '[]'
+}
+
+# acr_prs_needing_review <prs-json> <seen-json> -> JSON array of {number, headSha}
+# for PRs where NO instance has a complete round at the current head ([] on
+# failure).
+#
+# This is the hole every other check falls through. ACR never re-queues a
+# completed review of a PR you authored (poller.ts: `if (isOwnPr) return false`),
+# so a head that arrives without a re-trigger — a hand push, or one whose trigger
+# did not land — is never reviewed. Every round on file is then stale, the
+# head_sha check excludes them all, and the PR becomes permanently invisible: not
+# approved, not blocked, just unseen.
+#
+# The answer is not to fix anything. It is to ask for the review that is missing.
+# Deduped on headSha so a PR waiting for a queued review is asked once, not once
+# every fire.
+acr_prs_needing_review() {
+  local prs="$1" seen="${2:-[]}" out='[]' num head hit
+  while IFS=$'\t' read -r num head; do
+    [ -n "$num" ] || continue
+    hit="$(acr_latest_rounds "$num" | jq -c \
+      --argjson seen "$seen" --arg num "$num" --arg head "$head" '
+        ($num | tonumber) as $n
+        | if any(.[]; .head_sha == $head) then empty
+          elif ($seen | any((.number? == $n) and (.headSha? == $head)
+                            and (.outcome? == "review_requested")))
+          then empty
+          else { number: $n, headSha: $head } end
+      ' 2>/dev/null)" || hit=''
+    [ -n "$hit" ] || continue
+    out="$(printf '%s' "$out" | jq -c --argjson o "$hit" '. + [$o]' 2>/dev/null)" || out='[]'
+  done < <(printf '%s' "$prs" | jq -r '.[]? | "\(.number)\t\(.headRefOid)"' 2>/dev/null)
+  printf '%s' "$out"
+}
+
+# acr_dismissed_approvals <pr-number> -> JSON array of the logins whose most
+# recent formal review on the PR was dismissed by GitHub ([] on none/failure).
+#
+# The one fact the `acr:v1` comments cannot carry. A round says what the reviewer
+# concluded; whether GitHub still honours that conclusion is decided afterwards,
+# by the repo's `dismiss-stale-reviews` setting, when the next commit lands. The
+# round still reads `approve` forever, so a gate trusting it alone believes a PR
+# has two approvals while GitHub reads REVIEW_REQUIRED and refuses the merge.
+#
+# Uses the REST reviews endpoint because DISMISSED is the state being looked for
+# and `gh pr view --json latestReviews` keeps it, but the point is the same one
+# gh_blocking_reviews makes about commit ids: this is the only view that carries
+# the whole per-author history to pick a latest from.
+acr_dismissed_approvals() {
+  local out
+  out="$(gh api "repos/{owner}/{repo}/pulls/$1/reviews" --paginate --slurp 2>/dev/null)" \
+    || { printf '[]'; return; }
+  printf '%s' "$out" \
+    | jq -c 'if type != "array" then [] elif (.[0]? | type) == "array" then add else . end
+             | group_by(.user.login // "")
+             | [ .[] | sort_by(.submitted_at) | last
+                 | select(.state == "DISMISSED") | .user.login ]' 2>/dev/null \
+    || printf '[]'
+}
+
+# acr_reviewers_behind_head <prs-json> <seen-json> -> JSON array of
+# {number, headSha, behind: [login…]} naming, per PR, exactly which instances
+# should be asked to review the current commit ([] on failure).
+#
+# The per-reviewer counterpart to acr_prs_needing_review, and the one that
+# matters once a PR has more than one instance on it. That helper asks whether
+# ANYONE has reviewed the current head, so a PR stays quiet as long as a single
+# colleague's instance keeps up — while YOUR instance, the one that will never
+# re-queue itself, drifts further behind with every push. Observed on three of
+# five open PRs at once: assiad and schlenks current, nk18chi eight rounds and
+# several commits back, and nothing anywhere asking.
+#
+# Being behind is necessary but not sufficient. An instance whose last verdict
+# was `approve` has said its piece, and re-asking it on every push while someone
+# else is still holding the PR up buys nothing — the code it objected to is not
+# the code being changed. So:
+#
+#   while any instance is a holdout   ask only the holdouts that are behind,
+#                                     plus any approver GitHub has dismissed
+#   once every instance has approved  ask the ones still behind (the sweep)
+#
+# The sweep is not a nicety; it is what makes the deferral safe. A reviewer who
+# approved at head 1 has never seen the fixes made at heads 2-5, and without a
+# pass against the final commit its approval would be of code that no longer
+# exists. Deferring delays that reviewer's objection, it must never lose it.
+# Measured over six real PRs this asks 110 reviews where the eager rule asks
+# 140 — 21% fewer, and 37% on the twenty-head PR, since the saving grows with
+# how long a PR drags on.
+#
+# The dismissal clause is what stops the deferral latching, and it costs none of
+# that saving. On a repo with `dismiss-stale-reviews`, pushing voids every
+# approval on the PR — GitHub has already thrown the review away, so there is
+# nothing left to defer and re-asking spends nothing. Without it the sweep is
+# the only exit, and the sweep needs every instance to have approved: one
+# instance that keeps finding minor things (yours, on the PR you are pushing to)
+# holds the gate shut forever while the approvers it defers drift arbitrarily
+# far behind, and the PR sits at REVIEW_REQUIRED with nobody asked. Live on 5358
+# at round 13, with two approvals dismissed eight rounds back.
+#
+# Narrow on purpose: the release key is GitHub's DISMISSED, not "not currently
+# APPROVED". ACR reviews a PR you authored with a plain COMMENT review, since
+# GitHub forbids authors approving their own — so an approving instance of your
+# own never reads APPROVED, and keying on that would re-ask it on every push and
+# give the saving straight back.
+#
+# `behind` is empty when no instance has reviewed the PR at all. That is still
+# actionable — a PR nobody has looked at needs the same request — so the caller
+# reads an empty list as "ask everyone" rather than "ask no one".
+#
+# Dedup is per {number, headSha, reviewer}, not per head. Per head would suppress
+# the sweep outright: the holdout's own round arrives at a head already recorded
+# as asked, so the moment the PR goes all-approve there would be nothing left
+# that could ask the deferred reviewers.
+acr_reviewers_behind_head() {
+  local prs="$1" seen="${2:-[]}" out='[]' num head rounds dismissed hit
+  while IFS=$'\t' read -r num head; do
+    [ -n "$num" ] || continue
+    rounds="$(acr_latest_rounds "$num")"
+    # Only worth the extra call when a deferral is actually in force — a holdout
+    # on file, and an approver behind the head for it to hold back. Every other
+    # shape reaches the same answer without asking GitHub anything.
+    dismissed='[]'
+    if printf '%s' "$rounds" | jq -e --arg head "$head" '
+         any(.[]; .verdict != "approve")
+         and any(.[]; .verdict == "approve" and .head_sha != $head)
+       ' >/dev/null 2>&1; then
+      dismissed="$(acr_dismissed_approvals "$num")"
+    fi
+    hit="$(printf '%s' "$rounds" | jq -c \
+      --argjson seen "$seen" --argjson dismissed "$dismissed" \
+      --arg num "$num" --arg head "$head" '
+        ($num | tonumber) as $n
+        | . as $rounds
+        | [ $rounds[] | select(.head_sha != $head) ] as $behind
+        | [ $rounds[] | select(.verdict != "approve") ] as $holdouts
+        # Already asked at this head, per reviewer.
+        | [ $seen[]
+            | select((.number? == $n) and (.headSha? == $head))
+            | (.reviewers? // [])[] ] as $asked
+        | (if ($rounds | length) == 0 then []
+           elif ($holdouts | length) > 0
+           then [ $behind[]
+                  | select(.verdict != "approve"
+                           or (.reviewer | IN($dismissed[])))
+                  | .reviewer ]
+           else [ $behind[] | .reviewer ]
+           end) as $want
+        | [ $want[] | select(. as $w | $asked | index($w) | not) ] as $ask
+        | if ($rounds | length) == 0
+          then (if ($seen | any((.number? == $n) and (.headSha? == $head)))
+                then empty else { number: $n, headSha: $head, behind: [] } end)
+          elif ($ask | length) == 0 then empty
+          else { number: $n, headSha: $head, behind: ($ask | unique) } end
+      ' 2>/dev/null)" || hit=''
+    [ -n "$hit" ] || continue
+    out="$(printf '%s' "$out" | jq -c --argjson o "$hit" '. + [$o]' 2>/dev/null)" || out='[]'
+  done < <(printf '%s' "$prs" | jq -r '.[]? | "\(.number)\t\(.headRefOid)"' 2>/dev/null)
+  printf '%s' "$out"
 }
 
 # acr_unparsed_rounds <pr-number> -> JSON array of complete rounds whose verdict

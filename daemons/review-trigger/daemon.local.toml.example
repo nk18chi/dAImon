@@ -1,0 +1,8 @@
+# Copy to daemon.local.toml (gitignored) and set values for THIS machine.
+[daemon]
+working_dir = "~/Development/hub"   # the repo whose PRs this daemon watches
+
+[inputs]
+# Your ACR checkout — `pnpm -C <this> review owner/repo#N` triggers your own
+# instance, which is the only one that will never re-review your PR on its own.
+acr_repo = "~/Development/acr"

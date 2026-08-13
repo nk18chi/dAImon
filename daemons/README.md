@@ -13,6 +13,7 @@
 | [reply-to-pr-comments](reply-to-pr-comments/) | :17,47 | Respond to replies on your bot comments on GitHub PRs, and re-trigger review when feedback is addressed. |
 | [reply-to-story-comments](reply-to-story-comments/) | :17,47 | Respond to human replies on your bot comments on Shortcut stories, and re-trigger triage when an awaiting-input question is answered. |
 | [review-prs](review-prs/) | 1200s | Review open pull requests assigned to you and cast a risk-gated decision — approve, request changes, or comment. |
+| [review-trigger](review-trigger/) | :0,20,40 mon-fri | Ask for a review on your open PRs whose current commit nobody has reviewed — trigger your own ACR instance, re-request the others, and record the head so you don't ask twice. |
 | [story-reviewer](story-reviewer/) | 1800s | Triage stories — investigate each against the codebase, post an assessment, and stamp a visible label marking whether it's AI-completable. |
 | [work-queue](work-queue/) | :8,38 | Autonomously implement one ready story end-to-end on an isolated branch and open a pull request. |
 

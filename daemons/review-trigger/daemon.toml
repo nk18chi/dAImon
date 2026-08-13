@@ -1,0 +1,24 @@
+[daemon]
+backend = "claude"
+sources = [{ name = "acr", write = true }]
+# Offset from acr-fixer's :5/:25/:45 so the two never race if both are ever
+# enabled. Twenty minutes is also the debounce: a burst of pushes inside one
+# window is a single head by the time the gate looks, so it asks once.
+schedule = { minutes = [0, 20, 40], days = "mon-fri" }
+command = "/review-trigger"
+# This daemon reads and posts; it never builds, tests, or pushes. There is
+# nothing here that legitimately takes 45 minutes.
+stuck_after = 900
+# Read by discover.sh; an empty one would crash the gate under `set -u`, which is
+# indistinguishable from "no work" and would disable the daemon silently.
+required_inputs = ["skip_label"]
+
+[inputs]
+# Opt a PR OUT of automated review triggering by adding this label. Shares the
+# name acr-fixer uses so one label opts a PR out of all automation.
+skip_label = "acr-no-autofix"
+# Path to your ACR checkout, used to trigger your OWN instance
+# (`pnpm -C <path> review owner/repo#N`) — the poller never re-queues a completed
+# review of a PR you authored. Machine-local, so set it in daemon.local.toml.
+# Blank = skip that step; other reviewers are still re-requested via gh.
+acr_repo = ""
