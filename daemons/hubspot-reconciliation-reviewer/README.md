@@ -20,8 +20,8 @@ Review the daily HubSpot property reconciliation drift report, cluster it by map
 | `max_new_stories` | `3` | Most new clusters to file in a single run. Drift is bursty — 830 records in one day on 2026-07-30 against single digits either side — so the cap matters even though clustering already collapses ~1000 records into a handful of stories. |
 | `story_labels` | `crm-data-discrepancy` | Labels stamped on every story, comma-separated. Exact strings: the workspace holds 265 labels and near-miss spellings silently create new ones. |
 | `story_type` | `bug` | Existing stories in this class use bug branches (naokimita/bug/sc-51424/...). |
-| `epic_id` | `46244` | 👥 CRM - Post Launch. Pinned rather than inferred — an inferred epic drifts between runs and scatters the backlog. |
-| `team` | `686d63b1-4750-4b66-b819-2da4ac86d332` | Squad 3 - BAR, which owns epic 46244. |
+| `epic_id` | `51847` | 👥 CRM - Data Discrepancy and Reconciliation. Pinned rather than inferred — an inferred epic drifts between runs and scatters the backlog.  Was 46244 (👥 CRM - Post Launch) until 2026-08-13. That epic is where this work started, but reconciliation drift outgrew it and got its own; every story this daemon had filed was hand-moved off 46244 afterwards, one at a time. The pin is the only thing that decides where a story lands, so a stale pin is not a cosmetic wrong — it is a manual move per story, forever. |
+| `team` | `686d63b1-4750-4b66-b819-2da4ac86d332` | Squad 3 - BAR, which owns epic 51847. |
 | `triage_state` | `Backlog` | Overrides the fleet default ("To Do" in profiles/shortcut/profile.toml). CONSEQUENCE: story-reviewer's gate matches on the fleet triage state, so stories filed here are NOT auto-triaged into work-queue. That is deliberate — deciding whether Mongo or HubSpot is authoritative for a drifted field is a human call, not something to hand to an autonomous implementer. |
 
 ## Gate

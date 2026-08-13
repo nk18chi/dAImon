@@ -19,7 +19,7 @@ Review MongoDB Atlas query shapes, find the ones costing the most execution time
 | `ignore_namespaces` | — | Namespaces to ignore entirely, comma-separated (substring match on "db.collection"). Use for collections whose slowness is known and accepted — batch jobs, migrations, analytics scratch space. |
 | `story_labels` | `perf-database` | Labels stamped on every story this daemon files, comma-separated. These are categorization labels, NOT the ai-ready/ai-assist assessment labels — the daemon must still leave assessment to story-reviewer. |
 | `story_type` | `chore` | Tracker work-item type for filed stories. Performance work is maintenance, not new capability, so it lands as a chore. |
-| `epic_id` | `47834` | Epic filed stories group under. Pinned rather than left to the agent to infer — an inferred epic can drift between runs, scattering the backlog. |
+| `epic_id` | `51850` | ⚡ Database Query Performance — ongoing. Pinned rather than left to the agent to infer — an inferred epic can drift between runs, scattering the backlog.  Was 47834 (2026-06 perf wins) until 2026-08-13. A dated epic is the wrong home for a daemon that files every week: it closes at the end of its month while the daemon keeps going. Every story filed here was hand-moved off it afterwards. Prefer an open-ended epic for anything on a schedule. |
 
 ## Gate
 

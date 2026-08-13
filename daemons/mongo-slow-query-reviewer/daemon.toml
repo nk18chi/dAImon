@@ -31,6 +31,11 @@ story_labels = "perf-database"
 # Tracker work-item type for filed stories. Performance work is maintenance, not
 # new capability, so it lands as a chore.
 story_type = "chore"
-# Epic filed stories group under. Pinned rather than left to the agent to infer —
-# an inferred epic can drift between runs, scattering the backlog.
-epic_id = "47834"
+# ⚡ Database Query Performance — ongoing. Pinned rather than left to the agent to
+# infer — an inferred epic can drift between runs, scattering the backlog.
+#
+# Was 47834 (2026-06 perf wins) until 2026-08-13. A dated epic is the wrong home
+# for a daemon that files every week: it closes at the end of its month while the
+# daemon keeps going. Every story filed here was hand-moved off it afterwards.
+# Prefer an open-ended epic for anything on a schedule.
+epic_id = "51850"
