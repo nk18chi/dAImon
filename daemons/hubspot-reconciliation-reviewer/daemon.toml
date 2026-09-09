@@ -53,6 +53,13 @@ story_type = "bug"
 epic_id = "51847"
 # Squad 3 - BAR, which owns epic 51847.
 team = "686d63b1-4750-4b66-b819-2da4ac86d332"
+# Stamps the "Hubspot CRM" Product Area on every story this daemon files. Until
+# 2026-09-08 someone on the business side added it by hand to each new story;
+# without it the story is missing from the views that slice the board by product
+# surface. Exact option label from the workspace's Product Area field — a near
+# miss does not create a new option the way a label name would, it fails the
+# create, so the skill files the story without the field and says so.
+product_area = "Hubspot CRM"
 # Overrides the fleet default ("To Do" in profiles/shortcut/profile.toml).
 # CONSEQUENCE: story-reviewer's gate matches on the fleet triage state, so stories
 # filed here are NOT auto-triaged into work-queue. That is deliberate — deciding
