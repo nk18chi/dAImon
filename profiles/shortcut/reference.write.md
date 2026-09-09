@@ -105,3 +105,27 @@ STATE=$(curl -s https://api.app.shortcut.com/api/v3/workflows -H "Shortcut-Token
 curl -s -X POST https://api.app.shortcut.com/api/v3/stories -H "Shortcut-Token: $TOKEN" \
   -H "Content-Type: application/json" -d "{\"name\":\"…\",\"description\":\"…\",\"workflow_state_id\":$STATE}"
 ```
+
+#### Product Area
+
+**Product area:** `{{inputs.product_area}}` — blank means leave the field unset.
+
+When it is non-blank, every story you create carries the workspace's **Product
+Area** custom field set to that value. That field is how the business slices the
+board by product surface, so a story filed without it is invisible in those views
+until a human stamps it by hand — which is exactly the manual step this input
+exists to remove.
+
+Custom fields are set by id, not by name, so resolve the field/value pair once
+per run and reuse it for every story:
+
+```bash
+CF=$(curl -s https://api.app.shortcut.com/api/v3/custom-fields -H "Shortcut-Token: $TOKEN" \
+  | python3 -c "import sys,json;f=next(f for f in json.load(sys.stdin) if f['name']=='Product Area');v=next(v for v in f['values'] if v['value']=='{{inputs.product_area}}');print(json.dumps([{'field_id':f['id'],'value_id':v['id']}]))")
+```
+
+then add `"custom_fields": $CF` to the create body. Unlike labels, Shortcut does
+not silently invent a custom-field value it doesn't recognize — the lookup above
+fails and the POST would be rejected — so if either name fails to resolve, file
+the story **without** the field and say so in your run output. A story missing one
+field is recoverable; a dropped story is not.

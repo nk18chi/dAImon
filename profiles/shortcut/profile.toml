@@ -15,3 +15,9 @@ priority_label = "ai-priority"
 skip_label = "no-ai"
 epic_id = ""
 exclude_epics = []
+# Value of the workspace's "Product Area" custom field to stamp on every story a
+# daemon creates. Blank = leave it unset, which is right for the fleet default:
+# the product area is a property of what a daemon watches, not of the workspace,
+# so each story-filing daemon sets its own in [inputs]. Must match the option
+# label in Shortcut exactly — an unrecognized value fails the create.
+product_area = ""
