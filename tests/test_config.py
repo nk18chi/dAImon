@@ -319,6 +319,43 @@ class ConfigTest(unittest.TestCase):
         )
         self.assertEqual(config.Config.load().daemon("alpha")["mcp"], ["codex"])
 
+    def test_tools_absent_by_default(self):
+        self.assertEqual(self.cfg.daemon("alpha")["tools"], [])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        self.assertEqual(self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"], "")
+
+    def test_tools_exported_as_shell_words(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Read", "Bash(git log:*)"]
+        """,
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
+        self.assertEqual(shlex.split(words), ["Read", "Bash(git log:*)"])
+
+    def test_validate_rejects_tools_with_codex(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            fallback_backend = "codex"
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Read"]
+        """,
+        )
+        errs = config.validate(config.Config.load())
+        self.assertTrue(any("tools allowlist is claude-only" in e for e in errs))
+
     def test_discover_memoized_and_invalidated_on_write(self):
         first = self.cfg.discover()
         self.assertIs(first, self.cfg.discover())

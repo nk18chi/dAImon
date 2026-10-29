@@ -28,6 +28,7 @@ usage: daimon <command> [args]
   daemons            list discovered daemons
   state <slug>       show a daemon's work-tracking record (--clear to reset)
                      (get [slug] / set [slug] read/write raw JSON — used by agents)
+  inbox take <slug>  drain a daemon's queued inbox messages, deduped, as JSON
   check-scope [base] fail if the branch touches paths outside allowed_paths
   models <backend>   list available models (claude|codex)
   mcp setup slack [client-id]
@@ -57,6 +58,7 @@ case "$CMD" in
   sync)      exec python3 -m daimon.sync "$@" ;;
   daemons)   exec python3 "$LIB/config.py" daemons ;;
   state)     exec bash "$LIB/state.sh" "$@" ;;
+  inbox)     exec python3 "$LIB/inbox_take.py" "$@" ;;
   check-scope) exec bash "$LIB/check-scope.sh" "$@" ;;
   models)    exec python3 "$LIB/models.py" "$@" ;;
   mcp)       exec python3 "$LIB/mcp_setup.py" "$@" ;;

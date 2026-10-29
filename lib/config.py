@@ -193,6 +193,8 @@ class Config:
         merged["required_inputs"] = list(ri) if isinstance(ri, list) else [ri]
         mcp = merged.get("mcp", [])
         merged["mcp"] = [mcp] if isinstance(mcp, str) else list(mcp)
+        tools = merged.get("tools", [])
+        merged["tools"] = [tools] if isinstance(tools, str) else list(tools)
         return merged
 
     def mcp_config(self, slug: str) -> dict:
@@ -378,6 +380,19 @@ def _mcp_errors(cfg: Config, slug: str) -> list[str]:
     return errors
 
 
+def _tools_errors(cfg: Config, slug: str) -> list[str]:
+    # Only the claude backend can enforce an allowlist. Letting a codex run
+    # (primary or fallback) proceed would silently drop the restriction, so a
+    # restricted daemon must not be able to reach codex at all.
+    if not cfg.daemon(slug)["tools"]:
+        return []
+    return [
+        f"{slug}: tools allowlist is claude-only — remove codex as backend/fallback_backend"
+        for be in cfg.backends(slug)
+        if be != "claude"
+    ]
+
+
 def validate(cfg: Config) -> list[str]:
     errors: list[str] = []
     if cfg.source is None:
@@ -426,6 +441,7 @@ def validate(cfg: Config) -> list[str]:
         else:
             errors.extend(_required_input_errors(cfg, slug))
             errors.extend(_mcp_errors(cfg, slug))
+            errors.extend(_tools_errors(cfg, slug))
     for slug in cfg.disabled:
         if slug not in {p.parent.name for p in cfg.daemons_dir().glob("*/daemon.toml")}:
             errors.append(f"[daemons].disabled references unknown daemon: {slug}")
@@ -501,6 +517,7 @@ def daemon_schema() -> dict:
             "working_dir": {"type": "string"},
             "learning": {"type": "boolean"},
             "mcp": {"type": "array", "items": {"type": "string", "enum": list(MCP_SERVERS)}},
+            "tools": {"type": "array", "items": {"type": "string"}},
             "required_inputs": {
                 "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
             },
@@ -533,6 +550,9 @@ def bundle_daemon_env(cfg: Config, slug: str) -> str:
         ("DAIMON_D_WORKING_DIR", d["working_dir"]),
         ("DAIMON_D_BACKENDS", be_list),
         ("DAIMON_D_MCP", d["mcp"]),
+        # Pre-quoted shell words: rules like "Bash(git log:*)" contain spaces,
+        # and the backend splices this into the command tmux runs via `sh -c`.
+        ("DAIMON_D_TOOLS", " ".join(shlex.quote(t) for t in d["tools"])),
         ("DAIMON_READY_TIMEOUT", cfg.defaults["ready_timeout"]),
     ]
     pairs += [(f"DAIMON_D_MODEL_{be.upper()}", cfg.model_for(slug, be)) for be in be_list]

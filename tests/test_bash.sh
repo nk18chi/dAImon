@@ -98,6 +98,17 @@ export DAIMON_MCP_CONFIG="$TMP/mcp.json"
 case "$(backend_cli_args opus 1 sess)" in *"--mcp-config $TMP/mcp.json --strict-mcp-config"*) mcp=1;; *) mcp=0;; esac
 check "$mcp" "1" "claude backend appends --mcp-config + --strict when set"
 unset DAIMON_MCP_CONFIG
+export DAIMON_D_TOOLS="Read 'Bash(git log:*)'"
+A="$(backend_cli_args opus 1 sess)"
+case "$A" in *--dangerously-skip-permissions*) d=1;; *) d=0;; esac
+check "$d" "0" "claude tools allowlist overrides danger"
+case "$A" in *"--permission-mode dontAsk"*) d=1;; *) d=0;; esac
+check "$d" "1" "claude tools allowlist runs dontAsk"
+# each rule must reach claude as one argv word after tmux's `sh -c`
+if sh -c "printf '%s\n' $A" | grep -qxF 'Bash(git log:*)'; then t=1; else t=0; fi
+check "$t" "1" "claude allowlist rule survives sh -c as one word"
+check "$(backend_ready_regex 1)" "don't ask on" "claude ready banner follows dontAsk"
+unset DAIMON_D_TOOLS
 
 export DAIMON_D_WORKING_DIR="/tmp/x.y/repo"
 source "$ROOT/backends/codex.sh"

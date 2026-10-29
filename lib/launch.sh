@@ -92,7 +92,7 @@ run_one_backend() {
   if [ "$mode" = "oneshot" ]; then
     tmux pipe-pane -t "$session" "cat >> '$tfile'" 2>/dev/null || true
   fi
-  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER stuck_after=$STUCK_AFTER" >> "$OPLOG"
+  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER tools=${DAIMON_D_TOOLS:+on} stuck_after=$STUCK_AFTER" >> "$OPLOG"
 
   local regex booted=0 i
   regex="$(backend_ready_regex "$DANGER")"

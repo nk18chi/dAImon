@@ -46,6 +46,15 @@ calling `backend_cli_args`. A backend that supports MCP should read that env var
 and pass the file to its CLI's MCP flag (empty/unset means no MCP). The `claude`
 backend maps it to `--mcp-config <file> --strict-mcp-config`.
 
+## Tool allowlist
+
+When a daemon sets `[daemon].tools`, `DAIMON_D_TOOLS` holds the rules as
+pre-quoted shell words. A backend that can enforce an allowlist should prefer it
+over the danger flag; the `claude` backend maps it to
+`--permission-mode dontAsk --setting-sources user --allowedTools <rules>` and
+reports the `don't ask on` banner as ready. Backends without an equivalent must
+not be used with `tools` (config validation enforces this for `codex`).
+
 ## How the launcher uses them
 
 `lib/launch.sh` exports `DAIMON_SENTINEL`, `DAIMON_HEARTBEAT`, and `DAIMON_WAIT`,

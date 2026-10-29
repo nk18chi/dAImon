@@ -150,6 +150,12 @@
             ]
           }
         },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "required_inputs": {
           "oneOf": [
             {
