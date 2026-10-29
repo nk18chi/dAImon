@@ -52,6 +52,7 @@ bot's unique name.
 |----------|---------|---------|
 | `BRIDGE_NAME` | `env-bridge` | App + bot display name (make it yours) |
 | `BRIDGE_SLASH_COMMAND` | `/hub` | Slash command — must be workspace-unique |
+| `BRIDGE_ASK_CHANNELS` | — | Comma-separated channel IDs where an @-mention is a free-form question for the `slack-ask` daemon instead of a command (see [docs/slack-commands.md](../../docs/slack-commands.md)) |
 | `DAIMON_STATE_DIR` | `~/.local/state/daimon` | Where the daimon inbox lives |
 | `DAIMON_BIN` | `~/.local/bin/daimon` | The daimon CLI used to nudge the daemon |
 
