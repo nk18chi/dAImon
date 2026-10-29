@@ -1,0 +1,42 @@
+# Machine-specific overrides for slack-ask. Copy to daemon.local.toml.
+[daemon]
+# A clone used ONLY by this daemon — each run does `git pull --ff-only`, so
+# never point it at a checkout you work in.
+working_dir = "~/src/slack-ask/my-repo"
+# The shared read-only list plus your read-only MCP tools. This replaces the
+# committed list, so keep the base entries. Name MCP tools one by one — a bare
+# "mcp__server" rule would also admit its write tools.
+tools = [
+  "Read",
+  "Grep",
+  "Glob",
+  "ToolSearch",
+  "Bash(daimon inbox take slack-ask)",
+  "Bash(git pull --ff-only)",
+  "Bash(git remote get-url origin)",
+  "Bash(git rev-parse HEAD)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+  "Bash(git blame:*)",
+  "mcp__plugin_slack_slack__slack_read_thread",
+  "mcp__plugin_slack_slack__slack_send_message",
+  # Production MongoDB — reads only. The allowlist is not enough on its own
+  # (an aggregate with $out/$merge writes): connect the server as a read-only
+  # Atlas user and/or with MDB_MCP_READ_ONLY=true.
+  "mcp__mongodb-mcp-server__find",
+  "mcp__mongodb-mcp-server__aggregate",
+  "mcp__mongodb-mcp-server__count",
+  "mcp__mongodb-mcp-server__list-databases",
+  "mcp__mongodb-mcp-server__list-collections",
+  "mcp__mongodb-mcp-server__collection-schema",
+  "mcp__mongodb-mcp-server__collection-indexes",
+  # HubSpot — reads only (useful for the crm playbook).
+  "mcp__hubspot__search_crm_objects",
+  "mcp__hubspot__get_crm_objects",
+  "mcp__hubspot__get_properties",
+]
+
+[inputs]
+# Start with a throwaway test channel (invite the bot and yourself). Add the
+# real channels only once answers there look right.
+channel_playbooks = ["C0123456789:crm"]

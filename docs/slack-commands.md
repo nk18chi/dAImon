@@ -8,6 +8,7 @@ daemons post updates back. Three pieces:
 | `slack-commands` daemon | The engine. Reads commands from its inbox, runs the matching plugin runbook, replies in Slack. |
 | A front door | Either `bridges/env-bridge` (a Socket Mode Slack app: slash command + @-mention) or the `slack-channel-watch` daemon (polls channels for `?`-prefixed messages — no Slack app needed). |
 | `slack-standup` daemon | Scheduled outbound: posts a standup on a weekday cadence. |
+| `slack-ask` daemon | Q&A bot: answers free-form @-mention questions from the codebase (see [below](#qa-bot-slack-ask)). |
 
 ## Prerequisites
 
@@ -93,3 +94,35 @@ Conventions:
 IDs, machine-only). Those admins manage everyone else from Slack:
 `access list` / `access grant @user` / `access revoke @user`, persisted in
 daemon state. Grants never confer admin.
+
+## Q&A bot (slack-ask)
+
+Tag the bot with a question in a configured channel — "@bot why didn't this
+deal sync to HubSpot?" — and the `slack-ask` daemon answers in the thread from
+the code (and read-only data tools you grant it). Each channel gets a
+playbook: `crm` explains behavior for non-engineers; `bug-triage` names likely
+causes and asks up to three follow-up questions. It only runs when tagged; to
+continue, tag it again in the thread — it re-reads the whole thread each time.
+
+**Setup** (start with a throwaway test channel):
+
+1. Create the channel, invite the bot (`/invite @<your-bot>`) **and yourself**
+   — replies post through your Slack MCP, so you must be a member.
+2. Put the channel ID in env-bridge's `.env` as `BRIDGE_ASK_CHANNELS`, and
+   restart `daimon bridge`.
+3. Copy `daemons/slack-ask/daemon.local.toml.example` to `daemon.local.toml`:
+   a dedicated clone as `working_dir`, the channel in `channel_playbooks`, and
+   the read-only MCP tools you want in `tools`.
+4. `daimon config validate && daimon sync`.
+
+**Security model.** Anyone in the channel can trigger it, so the message text
+is untrusted. The daemon sets `[daemon].tools`, which runs Claude in
+`dontAsk` mode: tools not on the allowlist are denied, never prompted, and the
+target repo's own settings can't widen the list. The default list is read-only
+(file reads, a few `git` reads, draining its own inbox, and two Slack tools).
+Data tools are opt-in and named one by one. The allowlist is not the only
+guard for a database: connect it as a **read-only user** too, since some
+"read" tools (an aggregate with `$out`/`$merge`) can write. The skill also
+treats Slack text as a question, never as instructions, refuses to post
+secrets, and answers data questions with aggregates and IDs, never raw
+documents. A mention in a channel not in `channel_playbooks` gets no answer.
