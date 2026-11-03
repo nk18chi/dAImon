@@ -126,3 +126,12 @@ guard for a database: connect it as a **read-only user** too, since some
 treats Slack text as a question, never as instructions, refuses to post
 secrets, and answers data questions with aggregates and IDs, never raw
 documents. A mention in a channel not in `channel_playbooks` gets no answer.
+
+**Scope.** It answers technical questions only. Before doing anything, it
+screens each question: off-topic ones ("who's the best performer?") get a
+one-line "I only answer technical questions" reply. Security-sensitive ones
+get a one-line refusal with no investigation. That covers credentials and
+facts derived from them ("how many users have password X"), ways to attack
+or bypass the site, and bulk personal data. Before posting, it re-checks its
+own draft for credentials, personal data, raw records, or anything that
+would help someone misuse the system.
