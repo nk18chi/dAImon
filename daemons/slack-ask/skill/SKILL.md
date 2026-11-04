@@ -12,8 +12,8 @@ Slack thread, and finish.
 
 You run with a **tool allowlist**: anything not on it is denied, not prompted.
 A denied call is expected — never try to work around one (no other shell
-commands, no writing files, no alternative tools). If you cannot answer within
-what you have, say so in the reply.
+commands, no alternative tools). The only file you may write is the Q&A log in
+step 7. If you cannot answer within what you have, say so in the reply.
 
 ## 0. Setup — in this order
 
@@ -36,7 +36,7 @@ Each message has `command` (the question, mention stripped), `channel`, `ts`,
 
 The answering channels are `{{inputs.channel_playbooks}}` — each entry is
 `<channel id>:<playbook>`. Look up the message's `channel`. **A channel that is
-not listed gets no reply and no work** — note it in your summary and move on.
+not listed gets no reply and no work** — log it (step 7) and move on.
 
 ## 2. Read the conversation
 
@@ -143,7 +143,43 @@ only (never bare URLs), no closing offers. If something failed (a tool error,
 code you couldn't find), reply with what went wrong instead of staying silent
 — a missing reply reads as being ignored.
 
-## 7. Finish
+## 7. Log it
+
+For every message — answered, declined, skipped, or failed — write one file
+with the Write tool so the operator can review and improve the bot later:
+
+`{{state_dir}}/qa-log/slack-ask/<YYYY-MM-DD>/<channel>-<ts>.md`
+
+(today's date; `channel` and `ts` from the message, `.` in `ts` kept as is).
+
+```markdown
+# <one-line summary of the question>
+
+- when: <date and time>
+- channel: <channel> (playbook: <playbook or "unlisted">)
+- asker: <user>
+- thread_ts: <thread_ts>
+- outcome: answered | asked-follow-up | declined-off-topic | declined-security | skipped-unlisted | failed
+
+## Question
+<the question as asked, verbatim>
+
+## Answer
+<the reply you posted, verbatim — or "none">
+
+## How I got there
+- <files, commits, and data tools you used; what you confirmed vs guessed>
+
+## Could be better
+- <what was missing or uncertain, and what would have made the answer
+  stronger — a doc, a field, access to a tool, a clearer playbook rule>
+```
+
+The log stays on this machine, but keep it to the same rules as the reply:
+no secrets, credentials, or raw records. A declined question's text is still
+logged as asked — that is how the screen gets tuned.
+
+## 8. Finish
 
 Summarize: how many messages were handled, which channel/playbook each used,
 which were declined (off-topic or security-sensitive), and anything skipped

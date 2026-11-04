@@ -342,6 +342,25 @@ class ConfigTest(unittest.TestCase):
         words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
         self.assertEqual(shlex.split(words), ["Read", "Bash(git log:*)"])
 
+    def test_state_dir_expanded_in_tools_and_skill(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Edit(/{{state_dir}}/qa/**)"]
+        """,
+        )
+        write(self.root / "daemons" / "alpha" / "skill" / "SKILL.md", "Log to {{state_dir}}/qa.\n")
+        cfg = config.Config.load()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
+        self.assertEqual(shlex.split(words), [f"Edit(/{cfg.state_dir}/qa/**)"])
+        self.assertEqual(config.render_skill(cfg, "alpha"), f"Log to {cfg.state_dir}/qa.\n")
+
     def test_validate_rejects_tools_with_codex(self):
         write(
             self.root / "daemons" / "alpha" / "daemon.toml",

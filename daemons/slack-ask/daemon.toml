@@ -16,7 +16,10 @@ required_inputs = ["channel_playbooks"]
 # with dontAsk: anything not listed here is denied, never prompted. Claude-only,
 # so no codex fallback. A daemon.local.toml `tools` REPLACES this list — copy
 # it and add your read-only MCP tools (see daemon.local.toml.example).
+# The one write is the local Q&A log. Edit rules cover Write; the leading "/"
+# plus the absolute state_dir makes the "//" absolute-path form.
 tools = [
+  "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
   "Read",
   "Grep",
   "Glob",

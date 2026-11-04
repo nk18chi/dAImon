@@ -7,6 +7,7 @@ working_dir = "~/src/slack-ask/my-repo"
 # committed list, so keep the base entries. Name MCP tools one by one — a bare
 # "mcp__server" rule would also admit its write tools.
 tools = [
+  "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
   "Read",
   "Grep",
   "Glob",

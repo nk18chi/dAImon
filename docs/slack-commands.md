@@ -119,7 +119,8 @@ continue, tag it again in the thread — it re-reads the whole thread each time.
 is untrusted. The daemon sets `[daemon].tools`, which runs Claude in
 `dontAsk` mode: tools not on the allowlist are denied, never prompted, and the
 target repo's own settings can't widen the list. The default list is read-only
-(file reads, a few `git` reads, draining its own inbox, and two Slack tools).
+(file reads, a few `git` reads, draining its own inbox, and two Slack tools),
+plus writes to its own Q&A log folder and nowhere else.
 Data tools are opt-in and named one by one. The allowlist is not the only
 guard for a database: connect it as a **read-only user** too, since some
 "read" tools (an aggregate with `$out`/`$merge`) can write. The skill also
@@ -135,3 +136,11 @@ facts derived from them ("how many users have password X"), ways to attack
 or bypass the site, and bulk personal data. Before posting, it re-checks its
 own draft for credentials, personal data, raw records, or anything that
 would help someone misuse the system.
+
+**Q&A log.** Every mention (answered, declined, skipped, or failed) is logged
+as one markdown file on your machine, at
+`~/.local/state/daimon/qa-log/slack-ask/<date>/<channel>-<ts>.md`. Each file
+holds the question and the reply verbatim, the outcome, how the bot reached
+its answer, and a "Could be better" note on what was missing. Read them to
+tune the playbooks and the screen. For example, open that folder in Claude and
+ask which questions went badly and what to change in the skill.

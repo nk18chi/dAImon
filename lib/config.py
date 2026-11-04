@@ -342,7 +342,7 @@ def render_skill(cfg: Config, slug: str) -> str:
     for key, val in d["inputs"].items():
         rendered = ", ".join(str(x) for x in val) if isinstance(val, list) else str(val)
         text = text.replace(f"{{{{inputs.{key}}}}}", rendered)
-    return text
+    return text.replace("{{state_dir}}", str(cfg.state_dir))
 
 
 def _is_empty(value) -> bool:
@@ -552,7 +552,13 @@ def bundle_daemon_env(cfg: Config, slug: str) -> str:
         ("DAIMON_D_MCP", d["mcp"]),
         # Pre-quoted shell words: rules like "Bash(git log:*)" contain spaces,
         # and the backend splices this into the command tmux runs via `sh -c`.
-        ("DAIMON_D_TOOLS", " ".join(shlex.quote(t) for t in d["tools"])),
+        # {{state_dir}} lets a rule scope writes to the daemon's own state.
+        (
+            "DAIMON_D_TOOLS",
+            " ".join(
+                shlex.quote(t.replace("{{state_dir}}", str(cfg.state_dir))) for t in d["tools"]
+            ),
+        ),
         ("DAIMON_READY_TIMEOUT", cfg.defaults["ready_timeout"]),
     ]
     pairs += [(f"DAIMON_D_MODEL_{be.upper()}", cfg.model_for(slug, be)) for be in be_list]
