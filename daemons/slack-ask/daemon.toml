@@ -26,8 +26,6 @@ tools = [
   "ToolSearch",
   "Bash(daimon inbox take slack-ask)",
   "Bash(git pull --ff-only)",
-  "Bash(git remote get-url origin)",
-  "Bash(git rev-parse HEAD)",
   "Bash(git log:*)",
   "Bash(git show:*)",
   "Bash(git blame:*)",

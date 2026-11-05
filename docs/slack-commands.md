@@ -99,9 +99,10 @@ daemon state. Grants never confer admin.
 
 Tag the bot with a question in a configured channel — "@bot why didn't this
 deal sync to HubSpot?" — and the `slack-ask` daemon answers in the thread from
-the code (and read-only data tools you grant it). Each channel gets a
-playbook: `crm` explains behavior for non-engineers; `bug-triage` names likely
-causes and asks up to three follow-up questions. It only runs when tagged; to
+the code (and read-only data tools you grant it), in plain language. Each
+channel gets a playbook: `crm` explains behavior for non-engineers;
+`bug-triage` names likely causes and asks up to three follow-up questions. It
+only runs when tagged; to
 continue, tag it again in the thread — it re-reads the whole thread each time.
 
 **Setup** (start with a throwaway test channel):
@@ -133,14 +134,21 @@ screens each question: off-topic ones ("who's the best performer?") get a
 one-line "I only answer technical questions" reply. Security-sensitive ones
 get a one-line refusal with no investigation. That covers credentials and
 facts derived from them ("how many users have password X"), ways to attack
-or bypass the site, and bulk personal data. Before posting, it re-checks its
-own draft for credentials, personal data, raw records, or anything that
-would help someone misuse the system.
+or bypass the site, and bulk personal data.
+
+It reads the code but never shows it. Replies describe behavior in product
+terms, with no file, function, or field names, line numbers, snippets, links,
+endpoints, or suggested code fixes. A question whose answer *is* such a
+detail ("which file does X?", "what's the endpoint for Y?") gets a one-line
+"ask engineering" reply. Before posting, it re-checks its own draft for
+credentials, personal data, raw records, code details, or anything that would
+help someone misuse the system.
 
 **Q&A log.** Every mention (answered, declined, skipped, or failed) is logged
 as one markdown file on your machine, at
 `~/.local/state/daimon/qa-log/slack-ask/<date>/<channel>-<ts>.md`. Each file
 holds the question and the reply verbatim, the outcome, how the bot reached
-its answer, and a "Could be better" note on what was missing. Read them to
+its answer (including the files it read, which the reply never shows), and a
+"Could be better" note on what was missing. Read them to
 tune the playbooks and the screen. For example, open that folder in Claude and
 ask which questions went badly and what to change in the skill.
