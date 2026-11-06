@@ -16,9 +16,12 @@ required_inputs = ["channel_playbooks"]
 # with dontAsk: anything not listed here is denied, never prompted. Claude-only,
 # so no codex fallback. A daemon.local.toml `tools` REPLACES this list — copy
 # it and add your read-only MCP tools (see daemon.local.toml.example).
-# The one write is the local Q&A log. Edit rules cover Write; the leading "/"
-# plus the absolute state_dir makes the "//" absolute-path form.
+# No Slack tools: env-bridge hands over the thread and posts the reply as the
+# bot. The only writes are that reply (the outbox) and the local Q&A log. Edit
+# rules cover Write; the leading "/" plus the absolute state_dir makes the "//"
+# absolute-path form.
 tools = [
+  "Edit(/{{state_dir}}/outbox/slack-ask/**)",
   "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
   "Read",
   "Grep",
@@ -29,14 +32,11 @@ tools = [
   "Bash(git log:*)",
   "Bash(git show:*)",
   "Bash(git blame:*)",
-  "mcp__plugin_slack_slack__slack_read_thread",
-  "mcp__plugin_slack_slack__slack_send_message",
 ]
 
 [inputs]
 # "<channel id>:<playbook>" per answering channel. Playbooks: crm, bug-triage.
 # The same channel IDs go in env-bridge's BRIDGE_ASK_CHANNELS.
 channel_playbooks = ["CHANGE_ME:crm"]
-# Every reply starts with this. Replies post through your Slack MCP — i.e. as
-# you — so readers need to see it was the AI answering.
+# Every reply starts with this, so readers see it was the AI answering.
 reply_prefix = ":robot_face: *AI answer*"

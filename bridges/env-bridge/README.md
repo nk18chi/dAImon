@@ -61,6 +61,9 @@ committed source of truth is `manifest.template.json`.
 
 ## Notes
 
-- Replies come from the daemon's Slack credentials, not this bot — the app
-  only posts the ephemeral "queued" acknowledgement.
+- `slack-commands` replies come from the daemon's Slack credentials; for
+  those, the app only posts the "queued" acknowledgement.
+- `slack-ask` has no Slack access. For a mention in an ask channel the app
+  reads the thread into the queued message, then posts the daemon's reply as
+  this bot from `<state dir>/outbox/slack-ask/` — only into an ask channel.
 - `.scrap/` holds unused Slack starter-template parts; delete it freely.

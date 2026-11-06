@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { App, LogLevel } from '@slack/bolt';
 import { config } from 'dotenv';
+import { ASK_CHANNELS } from './lib/ask-channels.js';
+import { startOutbox } from './lib/outbox.js';
 import { registerListeners } from './listeners/index.js';
 
 config();
@@ -32,6 +34,7 @@ registerListeners(app);
 (async () => {
   try {
     await app.start();
+    startOutbox(app.client, ASK_CHANNELS, app.logger);
     app.logger.info('⚡️ Bolt app is running!');
   } catch (error) {
     app.logger.error('Failed to start the app', error);

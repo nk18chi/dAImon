@@ -15,7 +15,7 @@ Answer @-mention questions from configured Slack channels using the codebase and
 | Input | Default | Notes |
 |-------|---------|-------|
 | `channel_playbooks` | `CHANGE_ME:crm` | "<channel id>:<playbook>" per answering channel. Playbooks: crm, bug-triage. The same channel IDs go in env-bridge's BRIDGE_ASK_CHANNELS. |
-| `reply_prefix` | `:robot_face: *AI answer*` | Every reply starts with this. Replies post through your Slack MCP — i.e. as you — so readers need to see it was the AI answering. |
+| `reply_prefix` | `:robot_face: *AI answer*` | Every reply starts with this, so readers see it was the AI answering. |
 
 ## Gate
 

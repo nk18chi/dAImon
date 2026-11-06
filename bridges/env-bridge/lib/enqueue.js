@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const STATE_DIR = process.env.DAIMON_STATE_DIR ?? path.join(os.homedir(), '.local/state/daimon');
+export const STATE_DIR = process.env.DAIMON_STATE_DIR ?? path.join(os.homedir(), '.local/state/daimon');
 const INBOX = path.join(STATE_DIR, 'runtime', 'inbox.json');
 const DAIMON = process.env.DAIMON_BIN ?? path.join(os.homedir(), '.local/bin/daimon');
 const DEFAULT_TARGET = 'slack-commands';

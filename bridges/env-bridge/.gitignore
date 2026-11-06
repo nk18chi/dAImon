@@ -4,3 +4,5 @@
 !.env.sample
 .scrap/
 /manifest.json
+# Slack CLI's record of which app this checkout runs — per engineer.
+.slack/apps.json

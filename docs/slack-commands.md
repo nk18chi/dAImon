@@ -107,8 +107,9 @@ continue, tag it again in the thread — it re-reads the whole thread each time.
 
 **Setup** (start with a throwaway test channel):
 
-1. Create the channel, invite the bot (`/invite @<your-bot>`) **and yourself**
-   — replies post through your Slack MCP, so you must be a member.
+1. Create the channel and invite the bot (`/invite @<your-bot>`). slack-ask
+   doesn't use the Slack MCP: the bridge hands it the thread and posts its
+   reply as the bot.
 2. Put the channel ID in env-bridge's `.env` as `BRIDGE_ASK_CHANNELS`, and
    restart `daimon bridge`.
 3. Copy `daemons/slack-ask/daemon.local.toml.example` to `daemon.local.toml`:
@@ -120,8 +121,11 @@ continue, tag it again in the thread — it re-reads the whole thread each time.
 is untrusted. The daemon sets `[daemon].tools`, which runs Claude in
 `dontAsk` mode: tools not on the allowlist are denied, never prompted, and the
 target repo's own settings can't widen the list. The default list is read-only
-(file reads, a few `git` reads, draining its own inbox, and two Slack tools),
-plus writes to its own Q&A log folder and nowhere else.
+(file reads, a few `git` reads, draining its own inbox), plus writes to two
+folders of its own and nowhere else: the outbox, which holds its reply, and
+the Q&A log. It has no Slack access at all. The bridge reads the thread when
+the mention arrives and posts the reply from the outbox as the bot, only into
+an ask channel.
 Data tools are opt-in and named one by one. The allowlist is not the only
 guard for a database: connect it as a **read-only user** too, since some
 "read" tools (an aggregate with `$out`/`$merge`) can write. The skill also
@@ -135,6 +139,9 @@ one-line "I only answer technical questions" reply. Security-sensitive ones
 get a one-line refusal with no investigation. That covers credentials and
 facts derived from them ("how many users have password X"), ways to attack
 or bypass the site, and bulk personal data.
+
+Replies are written like a teammate's: the answer first, usually one to three
+short sentences, with bullets only for a real list.
 
 It reads the code but never shows it. Replies describe behavior in product
 terms, with no file, function, or field names, line numbers, snippets, links,
