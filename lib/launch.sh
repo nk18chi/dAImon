@@ -188,7 +188,10 @@ fi
 if [ -n "$WORKING_DIR" ] && [ -d "$WORKING_DIR" ]; then
   # shellcheck disable=SC2016  # the single-quoted $DAIMON_STATE_FILE is a literal filename
   for stray in "$WORKING_DIR/"'$DAIMON_STATE_FILE' "$WORKING_DIR/.daimon"; do
-    [ -e "$stray" ] && rm -rf "$stray" \
-      && log_event "$SLUG" cleanup "removed leaked repo artifact ${stray##*/}" >> "$OPLOG"
+    # An if, not `[ -e ] && ...`: a missing artifact must not become the
+    # script's exit status, or `daimon run` reports every clean run as failed.
+    if [ -e "$stray" ]; then
+      rm -rf "$stray" && log_event "$SLUG" cleanup "removed leaked repo artifact ${stray##*/}" >> "$OPLOG"
+    fi
   done
 fi
