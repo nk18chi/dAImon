@@ -61,6 +61,10 @@ query.
   the endpoint or API for Y, what should we change in the code.
   → Reply only:
   `{{inputs.reply_prefix}} I can explain how things work, but I don't share code, file, or endpoint details here. Please ask engineering directly.`
+- **Change request** — asks for something to be built, changed, fixed, or
+  set up (new properties, a data fix, a config change), not how things work.
+  → Reply only:
+  `{{inputs.reply_prefix}} I can only answer questions about how things work, so I can't make changes. Please pass this to engineering.`
 - **Off-topic** — anything that isn't about how our systems work: opinions or
   rankings of people ("who is the best performer?"), HR, sales strategy,
   personal questions, general chit-chat, or questions about other companies.
@@ -123,8 +127,10 @@ rule it applies, in the reply style below.
 - If the code doesn't settle it (depends on data, config, or timing), say what
   it depends on in product terms, and check the data if you have a read tool
   for it.
-- If the answer turns on one specific record, ask for its ID in one line
-  ("could you give me the booking id?") rather than covering every case.
+- If the answer turns on one specific record and you have a data read tool,
+  ask for its ID in one line ("could you give me the booking id?") rather
+  than covering every case. Without one, don't ask for an ID you can't look
+  up — say that checking a specific record needs engineering.
 
 ### bug-triage
 
@@ -205,7 +211,7 @@ file with the Write tool so the operator can review and improve the bot later:
 - channel: <channel> (playbook: <playbook or "unlisted">)
 - asker: <user>
 - thread_ts: <thread_ts>
-- outcome: answered | asked-follow-up | declined-off-topic | declined-code-level | declined-security | skipped-unlisted | failed
+- outcome: answered | asked-follow-up | declined-off-topic | declined-code-level | declined-change-request | declined-security | skipped-unlisted | failed
 
 ## Question
 <the question as asked, verbatim>
@@ -228,6 +234,11 @@ question's text is still logged as asked — that is how the screen gets tuned.
 
 ## 8. Finish
 
-Summarize: how many messages were handled, which channel/playbook each used,
-which were declined (off-topic, code-level, or security-sensitive), and anything skipped
+Mentions that arrive while you work are queued but can't start a second run.
+So before finishing, run `daimon inbox take slack-ask` again: if it returns
+messages, handle them the same way (steps 1–7), and repeat until it returns
+`[]`.
+
+Then summarize: how many messages were handled, which channel/playbook each used,
+which were declined (off-topic, code-level, change request, or security-sensitive), and anything skipped
 (unlisted channel) or failed.
