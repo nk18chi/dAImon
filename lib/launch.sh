@@ -75,6 +75,16 @@ run_one_backend() {
   fi
   export DAIMON_MCP_CONFIG="$mcp_file"
 
+  # A tools allowlist runs with no settings files at all; build the hooks and
+  # allowlisted-MCP files it starts from instead (see restricted_claude.py).
+  local restricted="" warn
+  if [ -n "${DAIMON_D_TOOLS:-}" ]; then
+    restricted="$(restricted_dir "$SLUG")"
+    warn="$(DAIMON_D_TOOLS="$DAIMON_D_TOOLS" python3 "$DAIMON_LIB_DIR/restricted_claude.py" "$restricted" 2>&1)"
+    [ -n "$warn" ] && log_event "$SLUG" restricted "$warn" >> "$OPLOG"
+  fi
+  export DAIMON_RESTRICTED_DIR="$restricted"
+
   local bin args stdin=""
   bin="$(backend_bin)"
   args="$(backend_cli_args "$model" "$DANGER" "$session")"

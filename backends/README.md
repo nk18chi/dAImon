@@ -51,8 +51,11 @@ backend maps it to `--mcp-config <file> --strict-mcp-config`.
 When a daemon sets `[daemon].tools`, `DAIMON_D_TOOLS` holds the rules as
 pre-quoted shell words. A backend that can enforce an allowlist should prefer it
 over the danger flag; the `claude` backend maps it to
-`--permission-mode dontAsk --setting-sources user --allowedTools <rules>` and
-reports the `don't ask on` banner as ready. Backends without an equivalent must
+`--permission-mode dontAsk --setting-sources '' --allowedTools <rules>` and
+reports the `don't ask on` banner as ready. Loading no settings files keeps the
+user's own allow rules out too; `lib/launch.sh` builds `DAIMON_RESTRICTED_DIR`
+(via `lib/restricted_claude.py`) with dAImon's hooks for `--settings` and the
+allowlisted MCP servers for `--mcp-config --strict-mcp-config`. Backends without an equivalent must
 not be used with `tools` (config validation enforces this for `codex`).
 
 ## How the launcher uses them

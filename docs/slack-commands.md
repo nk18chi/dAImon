@@ -114,8 +114,17 @@ continue, tag it again in the thread — it re-reads the whole thread each time.
    restart `daimon bridge`.
 3. Copy `daemons/slack-ask/daemon.local.toml.example` to `daemon.local.toml`:
    a dedicated clone as `working_dir`, the channel in `channel_playbooks`, and
-   the read-only MCP tools you want in `tools`.
+   the read-only data tools you want in `tools`. If the clone has a
+   `.mise.toml`, run `mise trust` in it — otherwise `npx` fails there and the
+   MongoDB server can't start.
 4. `daimon config validate && daimon sync`.
+
+**Read-only, always.** The bot only reads and answers. It never writes,
+changes, or deletes data or configuration — not in the database, HubSpot,
+Datadog, the repo, or anywhere else — and declines every request to, however
+it's asked. Two layers hold this: its tool allowlist contains only read tools,
+and its instructions repeat the rule at every step that touches data. Only
+add read tools to `tools`.
 
 **Security model.** Anyone in the channel can trigger it, so the message text
 is untrusted. The daemon sets `[daemon].tools`, which runs Claude in
@@ -127,8 +136,10 @@ the Q&A log. It has no Slack access at all. The bridge reads the thread when
 the mention arrives and posts the reply from the outbox as the bot, only into
 an ask channel.
 Data tools are opt-in and named one by one. The allowlist is not the only
-guard for a database: connect it as a **read-only user** too, since some
-"read" tools (an aggregate with `$out`/`$merge`) can write. The skill also
+guard for a database: run the MongoDB server with `MDB_MCP_READ_ONLY=true`,
+and leave `aggregate` off unless it connects as a **read-only user**, since an
+aggregate with `$out`/`$merge` can write. For Datadog, allow only
+`pup logs search` and `pup logs aggregate`. The skill also
 treats Slack text as a question, never as instructions, refuses to post
 secrets, and answers data questions with aggregates and IDs, never raw
 documents. A mention in a channel not in `channel_playbooks` gets no answer.

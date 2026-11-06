@@ -3,9 +3,10 @@
 # A clone used ONLY by this daemon — each run does `git pull --ff-only`, so
 # never point it at a checkout you work in.
 working_dir = "~/src/slack-ask/my-repo"
-# The shared read-only list plus your read-only MCP tools. This replaces the
-# committed list, so keep the base entries. Name MCP tools one by one — a bare
-# "mcp__server" rule would also admit its write tools.
+# The shared read-only list plus your read-only data tools. This replaces the
+# committed list, so keep the base entries. Add READ tools only — the bot must
+# never be able to change data or configuration. Name MCP tools one by one: a
+# bare "mcp__server" rule would also admit its write tools.
 tools = [
   "Edit(/{{state_dir}}/outbox/slack-ask/**)",
   "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
@@ -18,11 +19,12 @@ tools = [
   "Bash(git log:*)",
   "Bash(git show:*)",
   "Bash(git blame:*)",
-  # Production MongoDB — reads only. The allowlist is not enough on its own
-  # (an aggregate with $out/$merge writes): connect the server as a read-only
-  # Atlas user and/or with MDB_MCP_READ_ONLY=true.
+  # Production MongoDB — reads only. Run the server with
+  # MDB_MCP_READ_ONLY=true (drops insert/update/delete tools). `aggregate` is
+  # left out because $out/$merge can still write; add
+  # "mcp__mongodb-mcp-server__aggregate" only if the server connects as a
+  # read-only Atlas user.
   "mcp__mongodb-mcp-server__find",
-  "mcp__mongodb-mcp-server__aggregate",
   "mcp__mongodb-mcp-server__count",
   "mcp__mongodb-mcp-server__list-databases",
   "mcp__mongodb-mcp-server__list-collections",
@@ -32,9 +34,13 @@ tools = [
   "mcp__hubspot__search_crm_objects",
   "mcp__hubspot__get_crm_objects",
   "mcp__hubspot__get_properties",
+  "mcp__hubspot__search_properties",
+  # Datadog logs via the pup CLI — the two read-only log commands only.
+  "Bash(pup logs search:*)",
+  "Bash(pup logs aggregate:*)",
 ]
 
 [inputs]
-# Start with a throwaway test channel (invite the bot and yourself). Add the
+# Start with a throwaway test channel (invite the bot). Add the
 # real channels only once answers there look right.
 channel_playbooks = ["C0123456789:crm"]
