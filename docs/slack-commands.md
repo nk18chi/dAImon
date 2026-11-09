@@ -121,7 +121,8 @@ continue, tag it again in the thread — it re-reads the whole thread each time.
 
 **Read-only, always.** The bot only reads and answers. It never writes,
 changes, or deletes data or configuration — not in the database, HubSpot,
-Datadog, the repo, or anywhere else — and declines every request to, however
+Datadog, the repo, or anywhere else — and never runs anything (tests including
+E2E, scripts, jobs, syncs, deploys). It declines every such request, however
 it's asked. Two layers hold this: its tool allowlist contains only read tools,
 and its instructions repeat the rule at every step that touches data. Only
 add read tools to `tools`.
