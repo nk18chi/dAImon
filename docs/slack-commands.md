@@ -105,6 +105,14 @@ channel gets a playbook: `crm` explains behavior for non-engineers;
 only runs when tagged; to
 continue, tag it again in the thread — it re-reads the whole thread each time.
 
+It answers **one question per run**, oldest first, each in a fresh session, so
+one question's thread never mixes with another's and a crash costs at most one
+question. When several arrive at once, the first gets ":mag: looking into it…"
+and the rest get ":hourglass_flowing_sand: got it — N questions ahead of
+yours"; each run starts the next until the queue is empty. Each run pays a short
+startup (roughly 20–30 seconds), so a long queue drains steadily rather than
+all at once.
+
 **Setup** (start with a throwaway test channel):
 
 1. Create the channel and invite the bot (`/invite @<your-bot>`). slack-ask
@@ -159,9 +167,11 @@ It reads the code but never shows it. Replies describe behavior in product
 terms, with no file, function, or field names, line numbers, snippets, links,
 endpoints, or suggested code fixes. A question whose answer *is* such a
 detail ("which file does X?", "what's the endpoint for Y?") gets a one-line
-"ask engineering" reply. Before posting, it re-checks its own draft for
-credentials, personal data, raw records, code details, or anything that would
-help someone misuse the system.
+"ask engineering" reply. It never names people either: "who made this change?"
+or "who caused the outage?" gets what changed and when, in team terms ("we
+changed…"), never a commit author or teammate. Before posting, it re-checks
+its own draft for credentials, personal data, teammates' names, raw records,
+code details, or anything that would help someone misuse the system.
 
 **Q&A log.** Every mention (answered, declined, skipped, or failed) is logged
 as one markdown file on your machine, at

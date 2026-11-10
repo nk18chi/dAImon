@@ -15,6 +15,17 @@ session_name() {  # slug [backend]
   local slug="$1" be="${2:-}"
   if [ -n "$be" ]; then echo "${DAIMON_NS}-${slug}-${be}"; else echo "${DAIMON_NS}-${slug}"; fi
 }
+# The newest message key `daimon inbox take` recorded for a daemon (empty if
+# none). It moves only when a run takes a message, so launch.sh can tell a run
+# that made progress from one that never read its inbox.
+inbox_last_taken() {  # slug
+  python3 - "$DAIMON_STATE_DIR/state/$1.json" <<'PY'
+import json, sys
+try: keys = json.load(open(sys.argv[1])).get("handled_keys", [])
+except Exception: keys = []
+print(keys[-1] if keys else "")
+PY
+}
 sentinel_file()  { echo "/tmp/${DAIMON_NS}-done-$1"; }
 heartbeat_file() { echo "/tmp/${DAIMON_NS}-hb-$1"; }
 wait_file()      { echo "/tmp/${DAIMON_NS}-wait-$1"; }

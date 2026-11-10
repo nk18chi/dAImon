@@ -1,5 +1,6 @@
 import { ASK_CHANNELS } from '../lib/ask-channels.js';
 import { enqueueCommand } from '../lib/enqueue.js';
+import { ackText, isRunning } from '../lib/queue.js';
 
 const THREAD_LIMIT = 50;
 
@@ -32,10 +33,14 @@ export async function appMention({ event, client, say, logger }) {
     user: event.user,
     via: 'mention',
   };
-  if (ask) msg.thread = await readThread(client, event.channel, threadTs, logger);
-  await enqueueCommand(msg, logger, ask ? 'slack-ask' : undefined);
-  await say({
-    thread_ts: threadTs,
-    text: ask ? ':mag: looking into it…' : `:hourglass_flowing_sand: on it — \`${text}\``,
-  });
+  if (!ask) {
+    await enqueueCommand(msg, logger);
+    await say({ thread_ts: threadTs, text: `:hourglass_flowing_sand: on it — \`${text}\`` });
+    return;
+  }
+  msg.thread = await readThread(client, event.channel, threadTs, logger);
+  // Check before enqueueing: the enqueue starts a run for this very question.
+  const busy = await isRunning('slack-ask');
+  const queued = await enqueueCommand(msg, logger, 'slack-ask');
+  await say({ thread_ts: threadTs, text: ackText(queued - 1 + (busy ? 1 : 0)) });
 }

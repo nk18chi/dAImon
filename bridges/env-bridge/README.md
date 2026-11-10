@@ -55,6 +55,7 @@ bot's unique name.
 | `BRIDGE_ASK_CHANNELS` | — | Comma-separated channel IDs where an @-mention is a free-form question for the `slack-ask` daemon instead of a command (see [docs/slack-commands.md](../../docs/slack-commands.md)) |
 | `DAIMON_STATE_DIR` | `~/.local/state/daimon` | Where the daimon inbox lives |
 | `DAIMON_BIN` | `~/.local/bin/daimon` | The daimon CLI used to nudge the daemon |
+| `DAIMON_NS` | `daimon` | dAImon's `core.namespace`; the bridge checks the `<namespace>-slack-ask` session to tell a new question how many are ahead of it |
 
 `manifest.json` is generated (`npm run manifest`) and untracked — the
 committed source of truth is `manifest.template.json`.

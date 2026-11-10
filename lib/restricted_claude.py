@@ -25,6 +25,7 @@ import os
 import shlex
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,25 +45,34 @@ def mcp_subset(user_servers: dict, names: list[str]) -> dict:
     return {n: user_servers[n] for n in names if n in user_servers}
 
 
+# Writes here are atomic (temp + rename): two launchers started at once both run
+# this, and the loser must not truncate a file the winner's session is reading.
 def _write_private(path: Path, data) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    with os.fdopen(fd, "w") as f:  # mkstemp creates it 0600
         json.dump(data, f, indent=2)
         f.write("\n")
+    os.replace(tmp, path)
 
 
 def write_skill_plugin(out: Path, slug: str) -> bool:
     """Copy the skill `daimon sync` installed into a plugin dir for --plugin-dir."""
     plugin = out / "plugin"
-    shutil.rmtree(plugin, ignore_errors=True)
     skill = Path.home() / ".claude" / "skills" / slug
     if not (skill / "SKILL.md").is_file():
+        shutil.rmtree(plugin, ignore_errors=True)
         return False
-    (plugin / ".claude-plugin").mkdir(parents=True)
-    (plugin / ".claude-plugin" / "plugin.json").write_text(
+    current = plugin / "skills" / slug / "SKILL.md"
+    if current.is_file() and current.read_bytes() == (skill / "SKILL.md").read_bytes():
+        return True  # unchanged: leave it, a session may be loading it
+    staged = Path(tempfile.mkdtemp(dir=out, prefix=".plugin."))
+    (staged / ".claude-plugin").mkdir()
+    (staged / ".claude-plugin" / "plugin.json").write_text(
         json.dumps({"name": f"daimon-{slug}", "version": "0.0.0"}) + "\n"
     )
-    shutil.copytree(skill, plugin / "skills" / slug)
+    shutil.copytree(skill, staged / "skills" / slug)
+    shutil.rmtree(plugin, ignore_errors=True)
+    staged.rename(plugin)
     return True
 
 

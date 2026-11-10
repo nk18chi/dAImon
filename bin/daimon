@@ -29,6 +29,7 @@ usage: daimon <command> [args]
   state <slug>       show a daemon's work-tracking record (--clear to reset)
                      (get [slug] / set [slug] read/write raw JSON — used by agents)
   inbox take <slug>  drain a daemon's queued inbox messages, deduped, as JSON
+                     (--one: only the oldest; the next run takes the next)
   check-scope [base] fail if the branch touches paths outside allowed_paths
   models <backend>   list available models (claude|codex)
   mcp setup slack [client-id]

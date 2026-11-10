@@ -89,6 +89,11 @@ check "$(wc -c <"$TMP/throttle.err" | tr -d ' ')" "0" "throttle emits no stderr 
 python3 -c "import json;json.dump({'messages':[{'to':'foo'},{'to':'bar'}]},open('$TMP/state/runtime/inbox.json','w'))"
 DAEMON_NAME=foo source "$ROOT/lib/inbox.sh"
 check "$HAS_INBOX_MESSAGES" "1" "inbox counts messages for daemon"
+# launch.sh drains the queue only after a run moved this mark (took a message)
+check "$(inbox_last_taken foo)" "" "inbox_last_taken: nothing taken yet -> empty"
+mkdir -p "$DAIMON_STATE_DIR/state"
+python3 -c "import json;json.dump({'handled_keys':['C1:1.0','C1:2.0']},open('$DAIMON_STATE_DIR/state/foo.json','w'))"
+check "$(inbox_last_taken foo)" "C1:2.0" "inbox_last_taken: newest taken key"
 
 source "$ROOT/backends/claude.sh"
 unset DAIMON_MCP_CONFIG
@@ -104,11 +109,14 @@ case "$A" in *--dangerously-skip-permissions*) d=1;; *) d=0;; esac
 check "$d" "0" "claude tools allowlist overrides danger"
 case "$A" in *"--permission-mode dontAsk"*) d=1;; *) d=0;; esac
 check "$d" "1" "claude tools allowlist runs dontAsk"
-# each rule must reach claude as one argv word after tmux's `sh -c`
-if sh -c "printf '%s\n' $A" | grep -qxF 'Bash(git log:*)'; then t=1; else t=0; fi
+# each rule must reach claude as one argv word after tmux's `sh -c`. Capture
+# first: `grep -q` exits on the match and, under pipefail, printf's SIGPIPE
+# would fail the pipeline depending on timing.
+WORDS="$(sh -c "printf '[%s]\n' $A")"
+if grep -qxF '[Bash(git log:*)]' <<< "$WORDS"; then t=1; else t=0; fi
 check "$t" "1" "claude allowlist rule survives sh -c as one word"
 # no settings file may load: the user's own allow rules would widen the list
-if sh -c "printf '[%s]\n' $A" | grep -A1 -xF '[--setting-sources]' | grep -qxF '[]'; then t=1; else t=0; fi
+if grep -A1 -xF '[--setting-sources]' <<< "$WORDS" | grep -qxF '[]'; then t=1; else t=0; fi
 check "$t" "1" "claude allowlist loads no settings files"
 case "$A" in *"--settings '/tmp/r/settings.json' --mcp-config '/tmp/r/mcp.json' --strict-mcp-config"*) d=1;; *) d=0;; esac
 check "$d" "1" "claude allowlist takes hooks and MCP only from the restricted dir"

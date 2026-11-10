@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""`daimon inbox take <slug>`: remove a daemon's queued inbox messages and print
-the ones it has not handled yet, as a JSON list.
+"""`daimon inbox take <slug> [--one]`: remove a daemon's queued inbox messages
+and print the ones it has not handled yet, as a JSON list. `--one` takes only
+the oldest, so each run answers one message; launch.sh starts the next run
+while more are queued.
 
 This exists so an agent restricted by a tools allowlist can drain its inbox with
 one exact command instead of needing python/jq/shell access. Dedupe on
@@ -38,21 +40,21 @@ def _write_atomic(path: Path, data) -> None:
     os.replace(tmp, path)
 
 
-def take(inbox_path: Path, state_path: Path, slug: str) -> list[dict]:
+def take(inbox_path: Path, state_path: Path, slug: str, limit: int | None = None) -> list[dict]:
+    """Remove and return the slug's unhandled messages, oldest first. With a
+    limit, stop after that many fresh ones and leave the rest queued."""
     inbox = _load(inbox_path, {})
     messages = inbox.get("messages", []) if isinstance(inbox, dict) else []
-    mine = [m for m in messages if m.get("to") == slug]
-    if not mine:
-        return []
-    _write_atomic(inbox_path, {"messages": [m for m in messages if m.get("to") != slug]})
-
     state = _load(state_path, {})
     if not isinstance(state, dict):
         state = {}
     handled = list(state.get("handled_keys", []))
     seen = set(handled)
-    fresh = []
-    for m in mine:
+    fresh, keep = [], []
+    for m in messages:
+        if m.get("to") != slug or (limit is not None and len(fresh) >= limit):
+            keep.append(m)
+            continue
         key = f"{m.get('channel', '')}:{m.get('ts', '')}"
         # A message without a ts has no stable identity; pass it through rather
         # than collapse every such message onto one key.
@@ -62,18 +64,27 @@ def take(inbox_path: Path, state_path: Path, slug: str) -> list[dict]:
             seen.add(key)
             handled.append(key)
         fresh.append(m)
+    if len(keep) == len(messages):
+        return []
+    _write_atomic(inbox_path, {"messages": keep})
     state["handled_keys"] = handled[-HANDLED_KEEP:]
     _write_atomic(state_path, state)
     return fresh
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[0] != "take":
-        print("usage: daimon inbox take <slug>", file=sys.stderr)
+    one = argv[2:] == ["--one"]
+    if len(argv) not in (2, 3) or argv[0] != "take" or (len(argv) == 3 and not one):
+        print("usage: daimon inbox take <slug> [--one]", file=sys.stderr)
         return 2
     slug = argv[1]
     state_dir = config.Config.load().state_dir
-    msgs = take(state_dir / "runtime" / "inbox.json", state_dir / "state" / f"{slug}.json", slug)
+    msgs = take(
+        state_dir / "runtime" / "inbox.json",
+        state_dir / "state" / f"{slug}.json",
+        slug,
+        limit=1 if one else None,
+    )
     print(json.dumps(msgs, indent=2))
     return 0
 

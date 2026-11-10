@@ -1,8 +1,9 @@
 [daemon]
 backend = "claude"
 # Inbox-driven: env-bridge queues a message when the bot is @-mentioned in one
-# of BRIDGE_ASK_CHANNELS and nudges `daimon run slack-ask`. The schedule is only
-# a fallback sweep for mentions queued while a run was already in flight.
+# of BRIDGE_ASK_CHANNELS and nudges `daimon run slack-ask`. Each run answers one
+# question; launch.sh starts the next while more are queued. The schedule is
+# only a fallback sweep in case a queued question is ever left behind.
 schedule = { interval = 60 }
 command = "/slack-ask"
 # Answers come from reading code and data, which can sit quiet for a while
@@ -27,7 +28,7 @@ tools = [
   "Grep",
   "Glob",
   "ToolSearch",
-  "Bash(daimon inbox take slack-ask)",
+  "Bash(daimon inbox take slack-ask --one)",
   "Bash(git pull --ff-only)",
   "Bash(git log:*)",
   "Bash(git show:*)",

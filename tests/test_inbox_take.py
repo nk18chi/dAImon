@@ -57,8 +57,36 @@ class InboxTakeTest(unittest.TestCase):
         self.assertEqual(self._take(), [])
         self.assertFalse(self.state.exists())
 
+    def test_limit_takes_the_oldest_and_leaves_the_rest_queued_in_order(self):
+        self._queue(
+            {"to": "ask", "channel": "C1", "ts": "1.0"},
+            {"to": "other", "channel": "C1", "ts": "2.0"},
+            {"to": "ask", "channel": "C1", "ts": "3.0"},
+            {"to": "ask", "channel": "C1", "ts": "4.0"},
+        )
+        took = inbox_take.take(self.inbox, self.state, "ask", limit=1)
+        self.assertEqual([m["ts"] for m in took], ["1.0"])
+        left = json.loads(self.inbox.read_text())["messages"]
+        self.assertEqual([m["ts"] for m in left], ["2.0", "3.0", "4.0"])
+        took = inbox_take.take(self.inbox, self.state, "ask", limit=1)
+        self.assertEqual([m["ts"] for m in took], ["3.0"])
+
+    def test_limit_skips_past_duplicates_to_a_fresh_message(self):
+        self._queue({"to": "ask", "channel": "C1", "ts": "1.0"})
+        self._take()
+        self._queue(
+            {"to": "ask", "channel": "C1", "ts": "1.0"},
+            {"to": "ask", "channel": "C1", "ts": "3.0"},
+            {"to": "ask", "channel": "C1", "ts": "4.0"},
+        )
+        took = inbox_take.take(self.inbox, self.state, "ask", limit=1)
+        self.assertEqual([m["ts"] for m in took], ["3.0"])
+        left = json.loads(self.inbox.read_text())["messages"]
+        self.assertEqual([m["ts"] for m in left], ["4.0"])
+
     def test_usage_error(self):
         self.assertEqual(inbox_take.main(["drain", "ask"]), 2)
+        self.assertEqual(inbox_take.main(["take", "ask", "--all"]), 2)
 
 
 if __name__ == "__main__":

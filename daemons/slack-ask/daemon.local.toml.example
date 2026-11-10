@@ -14,7 +14,7 @@ tools = [
   "Grep",
   "Glob",
   "ToolSearch",
-  "Bash(daimon inbox take slack-ask)",
+  "Bash(daimon inbox take slack-ask --one)",
   "Bash(git pull --ff-only)",
   "Bash(git log:*)",
   "Bash(git show:*)",

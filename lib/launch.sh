@@ -95,8 +95,15 @@ run_one_backend() {
     stdin="< '$PROMPTF'"
   fi
   local tfile; tfile="$(transcripts_dir)/${SLUG}-${be}-$(date -u +%Y%m%dT%H%M%SZ).log"
-  tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
-    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin"
+  # The has-session check above races a launcher started at the same moment
+  # (two mentions at once). tmux refuses a duplicate name atomically: if the
+  # other launcher won, leave its session alone — don't reap it on return.
+  if ! tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
+    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin" 2>/dev/null; then
+    trap - RETURN
+    log_event "$SLUG" skip "session $session already running" >> "$OPLOG"
+    return 0
+  fi
   tmux set-option -t "$session" prefix2 C-a 2>/dev/null || true
   # A oneshot process can exit before the completion loop's final capture, so
   # stream the pane to the transcript live instead of grabbing it at the end.
@@ -168,10 +175,15 @@ run_one_backend() {
   return 0
 }
 
+TAKEN_BEFORE="$(inbox_last_taken "$SLUG")"
 fallback_succeeded=0
 for (( backend_i=0; backend_i<${#BACKENDS[@]}; backend_i++ )); do
   be="${BACKENDS[$backend_i]}"
-  run_one_backend "$be"; rc=$?
+  # Clear cleanup_be's RETURN trap here, in the caller: it outlives the function
+  # and would fire again when the script later `source`s a file, where its
+  # locals are gone — under set -u that kills the script. (Clearing it inside
+  # the handler doesn't stick; bash restores it.)
+  run_one_backend "$be"; rc=$?; trap - RETURN
   if [ "$rc" -eq 0 ]; then
     if [ -n "$EXHAUSTED_BACKEND" ]; then
       fallback_succeeded=1
@@ -206,3 +218,14 @@ if [ -n "$WORKING_DIR" ] && [ -d "$WORKING_DIR" ]; then
     fi
   done
 fi
+
+# Drain the queue one run at a time. A daemon that takes one message per run
+# (`daimon inbox take <slug> --one`) leaves the rest queued; go again, through
+# run.sh's gates, while messages wait. Only after a run that took something —
+# otherwise a run that never reads its inbox would relaunch forever.
+DAEMON_NAME="$SLUG" source "$DAIMON_LIB_DIR/inbox.sh"
+if [ "${HAS_INBOX_MESSAGES:-0}" -gt 0 ] && [ "$(inbox_last_taken "$SLUG")" != "$TAKEN_BEFORE" ]; then
+  log_event "$SLUG" drain "$HAS_INBOX_MESSAGES message(s) still queued; next run" >> "$OPLOG"
+  exec bash "$DAIMON_LIB_DIR/run.sh" "$SLUG"
+fi
+exit 0

@@ -60,6 +60,18 @@ class RestrictedClaudeTest(unittest.TestCase):
                 "---\nname: ask\n---\nbody\n",
             )
 
+    def test_plugin_follows_a_resynced_skill(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as out:
+            skill = Path(home, ".claude", "skills", "ask")
+            skill.mkdir(parents=True)
+            Path(skill, "SKILL.md").write_text("v1\n")
+            with mock.patch.object(Path, "home", return_value=Path(home)):
+                restricted_claude.write_skill_plugin(Path(out), "ask")
+                Path(skill, "SKILL.md").write_text("v2\n")
+                restricted_claude.write_skill_plugin(Path(out), "ask")
+            self.assertEqual(Path(out, "plugin", "skills", "ask", "SKILL.md").read_text(), "v2\n")
+            self.assertEqual([p.name for p in Path(out).iterdir()], ["plugin"])
+
     def test_unsynced_skill_writes_no_plugin(self):
         with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as out:
             with mock.patch.object(Path, "home", return_value=Path(home)):
