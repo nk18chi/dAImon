@@ -44,3 +44,5 @@ tools = [
 # Start with a throwaway test channel (invite the bot). Add the
 # real channels only once answers there look right.
 channel_playbooks = ["C0123456789:crm"]
+# Reporting questions (counts, trends) are sent to your Lightdash project.
+lightdash_url = "https://app.lightdash.cloud/projects/YOUR_PROJECT_ID"

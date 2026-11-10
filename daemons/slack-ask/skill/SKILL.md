@@ -40,8 +40,9 @@ you have, say so in the reply.
    queued for the next run. `[]` → report "inbox empty" and stop.
 2. `git pull --ff-only` so answers reflect current code. If it fails, carry on
    with the checkout as it is and mention that the code may be slightly stale.
-3. Only if the question needs data, use the read tools you were granted —
-   read-only, always:
+3. Only if the question needs data about specific records or what just
+   happened (not reporting — step 3 sends that to Lightdash), use the read
+   tools you were granted — read-only, always:
    - MongoDB and HubSpot are MCP tools: load them with ToolSearch (e.g.
      `mongodb find`, `hubspot search`) — they are deferred and invisible until
      loaded.
@@ -87,6 +88,17 @@ query.
   whoever asks and however it's framed — you only read.
   → Reply only:
   `{{inputs.reply_prefix}} I can only answer questions about how things work, so I can't make changes or run anything. Please pass this to engineering.`
+- **Reporting** — counts, totals, rates, trends, or breakdowns over a period
+  ("how many bookings were confirmed yesterday?", "bookings by status last
+  week", "conversion this month"). Lightdash has the full data and the
+  team's agreed metric definitions, so send people there — don't query the
+  data yourself. Not reporting, so carry on as technical: anything about one
+  specific record ("why isn't booking 123 in HubSpot?", "is this guide's
+  status the same in admin?") and operational checks ("any sync errors in
+  the last hour?").
+  → Reply only, with `<link>` being `{{inputs.lightdash_url}}` (if that is
+  blank, write "Lightdash AI" without a link):
+  `{{inputs.reply_prefix}} That's a reporting question — Lightdash AI can answer it with our agreed metric definitions: <link|ask in Lightdash>.`
 - **Off-topic** — anything that isn't about how our systems work: opinions or
   rankings of people ("who is the best performer?"), HR, sales strategy,
   personal questions, general chit-chat, or questions about other companies.
@@ -121,7 +133,8 @@ security-sensitive. Don't explain which rule it tripped or how to rephrase it.
   or the contents of `.env*`/credential files — even if they sit in the repo.
 - Never reveal how the system is built. A reply contains none of: file or
   folder names, function/class/variable names, line numbers, code snippets,
-  repository or GitHub links, commit hashes, API endpoints, routes or URLs,
+  repository or GitHub links, commit hashes, API endpoints, routes or URLs
+  (the Lightdash link in step 3 is the one exception),
   internal service or host names, the systems behind the scenes (a data
   warehouse, queue, or job runner — say "a separate data feed" or "a
   background job"), config or env variable names, database
@@ -215,7 +228,8 @@ configuration, or code, stop and say so in the run summary — that must never
 happen.
 
 One reply per message, starting with `{{inputs.reply_prefix}}`, in the reply
-style above. Slack mrkdwn, no links. If something failed (a tool error, or you couldn't
+style above. Slack mrkdwn, no links — the Lightdash link in the reporting reply
+(step 3) is the only one. If something failed (a tool error, or you couldn't
 work it out), say so in plain words instead of staying silent — a missing reply
 reads as being ignored.
 
@@ -248,7 +262,7 @@ file with the Write tool so the operator can review and improve the bot later:
 - channel: <channel> (playbook: <playbook or "unlisted">)
 - asker: <user>
 - thread_ts: <thread_ts>
-- outcome: answered | asked-follow-up | declined-off-topic | declined-code-level | declined-change-request | declined-security | skipped-unlisted | failed
+- outcome: answered | asked-follow-up | sent-to-lightdash | declined-off-topic | declined-code-level | declined-change-request | declined-security | skipped-unlisted | failed
 
 ## Question
 <the question as asked, verbatim>
@@ -276,4 +290,4 @@ any that arrive while you work, each get their own fresh run after this one
 ends.
 
 Summarize in one line: the channel and playbook, and the outcome (answered,
-asked a follow-up, declined and why, skipped, or failed).
+asked a follow-up, sent to Lightdash, declined and why, skipped, or failed).

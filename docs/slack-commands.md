@@ -155,7 +155,12 @@ documents. A mention in a channel not in `channel_playbooks` gets no answer.
 
 **Scope.** It answers technical questions only. Before doing anything, it
 screens each question: off-topic ones ("who's the best performer?") get a
-one-line "I only answer technical questions" reply. Security-sensitive ones
+one-line "I only answer technical questions" reply. Reporting questions
+(counts, totals, trends over a period: "how many bookings were confirmed
+yesterday?") get pointed to Lightdash AI, which has the full data and the
+agreed metric definitions — set `lightdash_url` in `[inputs]` to link it. The
+bot's own data tools are for one specific record ("why isn't booking 123 in
+HubSpot?") and operational checks ("any sync errors in the last hour?"). Security-sensitive ones
 get a one-line refusal with no investigation. That covers credentials and
 facts derived from them ("how many users have password X"), ways to attack
 or bypass the site, and bulk personal data.

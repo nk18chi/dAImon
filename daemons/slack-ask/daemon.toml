@@ -41,3 +41,7 @@ tools = [
 channel_playbooks = ["CHANGE_ME:crm"]
 # Every reply starts with this, so readers see it was the AI answering.
 reply_prefix = ":robot_face: *AI answer*"
+# Where reporting questions (counts, totals, trends over a period) are sent
+# instead of querying the data here: your BI tool's AI, e.g. a Lightdash project
+# URL. Blank = the reply names Lightdash AI without a link.
+lightdash_url = ""

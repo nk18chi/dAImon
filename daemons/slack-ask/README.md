@@ -16,6 +16,7 @@ Answer @-mention questions from configured Slack channels using the codebase and
 |-------|---------|-------|
 | `channel_playbooks` | `CHANGE_ME:crm` | "<channel id>:<playbook>" per answering channel. Playbooks: crm, bug-triage. The same channel IDs go in env-bridge's BRIDGE_ASK_CHANNELS. |
 | `reply_prefix` | `:robot_face: *AI answer*` | Every reply starts with this, so readers see it was the AI answering. |
+| `lightdash_url` | — | Where reporting questions (counts, totals, trends over a period) are sent instead of querying the data here: your BI tool's AI, e.g. a Lightdash project URL. Blank = the reply names Lightdash AI without a link. |
 
 ## Gate
 
