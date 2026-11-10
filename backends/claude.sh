@@ -10,12 +10,13 @@ backend_cli_args() {  # model danger(0/1) session_name -> args after the binary
   [ "$danger" = "1" ] && flag="--dangerously-skip-permissions"
   # A tools allowlist overrides danger: dontAsk denies anything unlisted instead
   # of prompting. No settings files load at all — the repo's or the user's own
-  # allow rules would widen the list — so dAImon's hooks and the allowlisted MCP
-  # servers come from DAIMON_RESTRICTED_DIR (see lib/restricted_claude.py).
+  # allow rules would widen the list — so dAImon's hooks, the allowlisted MCP
+  # servers, and the daemon's own skill (user skills don't load either) come
+  # from DAIMON_RESTRICTED_DIR (see lib/restricted_claude.py).
   # DAIMON_D_TOOLS is already shell-quoted words (see config.py).
   if [ -n "${DAIMON_D_TOOLS:-}" ]; then
     local r="${DAIMON_RESTRICTED_DIR:?restricted dir not built}"
-    flag="--permission-mode dontAsk --setting-sources '' --settings '$r/settings.json' --mcp-config '$r/mcp.json' --strict-mcp-config --allowedTools ${DAIMON_D_TOOLS}"
+    flag="--permission-mode dontAsk --setting-sources '' --settings '$r/settings.json' --mcp-config '$r/mcp.json' --strict-mcp-config --plugin-dir '$r/plugin' --allowedTools ${DAIMON_D_TOOLS}"
   fi
   [ -n "${DAIMON_MCP_CONFIG:-}" ] && mcp="--mcp-config ${DAIMON_MCP_CONFIG} --strict-mcp-config"
   printf '%s --model %s -n %s %s' "$flag" "$model" "$session_name" "$mcp"

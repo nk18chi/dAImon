@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Write the two files a tools-restricted Claude session starts from.
+"""Write what a tools-restricted Claude session starts from.
 
-usage: restricted_claude.py <out-dir>      (reads DAIMON_D_TOOLS from the env)
+usage: restricted_claude.py <out-dir> <slug>   (reads DAIMON_D_TOOLS from the env)
 
 A restricted session loads NO settings files: the user's own allow rules
 (`Bash(git commit:*)`, a broad loop pattern, ...) would otherwise widen the
@@ -11,6 +11,9 @@ writes those back, and nothing else:
   settings.json  dAImon's own hooks (heartbeat + completion sentinel)
   mcp.json       the user-scope MCP servers the allowlist names
                  (`mcp__<server>__<tool>`), copied from ~/.claude.json
+  plugin/        a one-skill plugin holding the daemon's synced skill. User
+                 skills are a user setting source too, so without this the
+                 launch command `/<slug>` is unknown and the session sits idle.
 
 mcp.json can hold credentials, so both files are written 0600.
 """
@@ -20,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import sys
 from pathlib import Path
 
@@ -47,12 +51,29 @@ def _write_private(path: Path, data) -> None:
         f.write("\n")
 
 
+def write_skill_plugin(out: Path, slug: str) -> bool:
+    """Copy the skill `daimon sync` installed into a plugin dir for --plugin-dir."""
+    plugin = out / "plugin"
+    shutil.rmtree(plugin, ignore_errors=True)
+    skill = Path.home() / ".claude" / "skills" / slug
+    if not (skill / "SKILL.md").is_file():
+        return False
+    (plugin / ".claude-plugin").mkdir(parents=True)
+    (plugin / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": f"daimon-{slug}", "version": "0.0.0"}) + "\n"
+    )
+    shutil.copytree(skill, plugin / "skills" / slug)
+    return True
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 1:
-        print("usage: restricted_claude.py <out-dir>", file=sys.stderr)
+    if len(argv) != 2:
+        print("usage: restricted_claude.py <out-dir> <slug>", file=sys.stderr)
         return 2
-    out = Path(argv[0])
+    out, slug = Path(argv[0]), argv[1]
     out.mkdir(parents=True, exist_ok=True)
+    if not write_skill_plugin(out, slug):
+        print(f"restricted_claude: skill '{slug}' not synced — run: daimon sync", file=sys.stderr)
     tools = shlex.split(os.environ.get("DAIMON_D_TOOLS", ""))
 
     hooks = json.loads((ROOT / "config" / "hooks" / "claude-hooks.json").read_text())

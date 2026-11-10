@@ -34,7 +34,7 @@ class RestrictedClaudeTest(unittest.TestCase):
                 mock.patch.dict(os.environ, env),
                 mock.patch.object(Path, "home", return_value=Path(home)),
             ):
-                self.assertEqual(restricted_claude.main([out]), 0)
+                self.assertEqual(restricted_claude.main([out, "ask"]), 0)
 
             mcp = json.loads(Path(out, "mcp.json").read_text())
             self.assertEqual(mcp, {"mcpServers": {"mongo-x": {"command": "npx"}}})
@@ -43,6 +43,28 @@ class RestrictedClaudeTest(unittest.TestCase):
             self.assertIn("Stop", settings["hooks"])
             for name in ("mcp.json", "settings.json"):
                 self.assertEqual(stat.S_IMODE(Path(out, name).stat().st_mode), 0o600, name)
+
+    def test_plugin_carries_the_synced_skill_so_slash_command_resolves(self):
+        # User skills don't load in a restricted session; without this plugin
+        # `/<slug>` is an unknown command and the session sits idle.
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as out:
+            skill = Path(home, ".claude", "skills", "ask")
+            skill.mkdir(parents=True)
+            Path(skill, "SKILL.md").write_text("---\nname: ask\n---\nbody\n")
+            with mock.patch.object(Path, "home", return_value=Path(home)):
+                self.assertTrue(restricted_claude.write_skill_plugin(Path(out), "ask"))
+            manifest = json.loads(Path(out, "plugin", ".claude-plugin", "plugin.json").read_text())
+            self.assertEqual(manifest["name"], "daimon-ask")
+            self.assertEqual(
+                Path(out, "plugin", "skills", "ask", "SKILL.md").read_text(),
+                "---\nname: ask\n---\nbody\n",
+            )
+
+    def test_unsynced_skill_writes_no_plugin(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as out:
+            with mock.patch.object(Path, "home", return_value=Path(home)):
+                self.assertFalse(restricted_claude.write_skill_plugin(Path(out), "ask"))
+            self.assertFalse(Path(out, "plugin").exists())
 
 
 if __name__ == "__main__":

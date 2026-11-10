@@ -112,6 +112,9 @@ if sh -c "printf '[%s]\n' $A" | grep -A1 -xF '[--setting-sources]' | grep -qxF '
 check "$t" "1" "claude allowlist loads no settings files"
 case "$A" in *"--settings '/tmp/r/settings.json' --mcp-config '/tmp/r/mcp.json' --strict-mcp-config"*) d=1;; *) d=0;; esac
 check "$d" "1" "claude allowlist takes hooks and MCP only from the restricted dir"
+# user skills don't load either; the daemon's own skill comes in as a plugin
+case "$A" in *"--plugin-dir '/tmp/r/plugin'"*) d=1;; *) d=0;; esac
+check "$d" "1" "claude allowlist loads the daemon skill from the restricted dir"
 check "$(backend_ready_regex 1)" "don't ask on" "claude ready banner follows dontAsk"
 unset DAIMON_D_TOOLS DAIMON_RESTRICTED_DIR
 
