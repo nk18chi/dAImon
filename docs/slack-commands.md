@@ -105,6 +105,14 @@ channel gets a playbook: `crm` explains behavior for non-engineers;
 only runs when tagged; to
 continue, tag it again in the thread — it re-reads the whole thread each time.
 
+To give it earlier context, such as a requirement agreed in another thread,
+paste a link to that Slack message into the question. The bridge reads up to
+three linked threads, from the same channel only, and the bot treats them as
+background: when they disagree with how the code works today, it says so. It
+doesn't read the rest of the channel, and it can't open any other link (web
+pages, documents, tickets, other channels); it asks people to paste the
+relevant part instead.
+
 It answers **one question per run**, oldest first, each in a fresh session, so
 one question's thread never mixes with another's and a crash costs at most one
 question. When several arrive at once, the first gets ":mag: looking into it…"
