@@ -1,6 +1,7 @@
 import { ASK_CHANNELS } from '../lib/ask-channels.js';
 import { enqueueCommand } from '../lib/enqueue.js';
 import { checkAndCount, refusalText } from '../lib/limits.js';
+import { messageLinks } from '../lib/links.js';
 import { ackText, isRunning } from '../lib/queue.js';
 
 const THREAD_LIMIT = 50;
@@ -46,6 +47,14 @@ export async function appMention({ event, client, say, logger }) {
     return;
   }
   msg.thread = await readThread(client, event.channel, threadTs, logger);
+  const links = messageLinks(event.text, event.channel);
+  if (links.elsewhere.length) logger?.info(`ignored ${links.elsewhere.length} link(s) to other channels`);
+  const linked = links.kept.filter((l) => l.threadTs !== threadTs);
+  if (linked.length) {
+    msg.linked = await Promise.all(
+      linked.map(async (l) => ({ url: l.url, thread: await readThread(client, event.channel, l.threadTs, logger) })),
+    );
+  }
   // Check before enqueueing: the enqueue starts a run for this very question.
   const busy = await isRunning('slack-ask');
   const queued = await enqueueCommand(msg, logger, 'slack-ask');
