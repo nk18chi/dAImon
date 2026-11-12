@@ -5,7 +5,7 @@
 Review the daily HubSpot property reconciliation drift report, cluster it by mapper field, and file one Shortcut story per new cluster.
 
 - **Command:** `/hubspot-reconciliation-reviewer`
-- **Schedule:** 09:00 mon-fri
+- **Schedule:** 09:00
 - **Source:** datadog, mongodb, shortcut (read-write)
 - **Required inputs:** `log_query`, `lookback`
 - **Backend:** `claude`

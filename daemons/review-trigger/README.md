@@ -5,9 +5,9 @@
 Ask for a review on your open PRs whose current commit nobody has reviewed — trigger your own ACR instance, re-request the others, and record the head so you don't ask twice.
 
 - **Command:** `/review-trigger`
-- **Schedule:** :0,20,40 mon-fri
+- **Schedule:** :0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57
 - **Source:** acr (read-write)
-- **Required inputs:** `skip_label`
+- **Required inputs:** `skip_label`, `max_reply_retriggers`
 - **Backend:** `claude`
 
 ## Inputs
@@ -16,6 +16,7 @@ Ask for a review on your open PRs whose current commit nobody has reviewed — t
 |-------|---------|-------|
 | `skip_label` | `acr-no-autofix` | Opt a PR OUT of automated review triggering by adding this label. Shares the name acr-fixer uses so one label opts a PR out of all automation. |
 | `acr_repo` | — | Path to your ACR checkout, used to trigger your OWN instance (`pnpm -C <path> review owner/repo#N`) — the poller never re-queues a completed review of a PR you authored. Machine-local, so set it in daemon.local.toml. Blank = skip that step; other reviewers are still re-requested via gh. |
+| `max_reply_retriggers` | `2` | How many times one reviewer may be re-asked at a single commit because you answered its findings in a reply rather than a push. Every other loop in this daemon terminates because a fix moves the head; a decline never moves it, so this path needs a counter of its own. Two rounds of "I decline" / "I re-raise" is a stable disagreement, not a convergence — past that it wants a human, not a third review. |
 
 ## Gate
 

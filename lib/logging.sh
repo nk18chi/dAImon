@@ -4,7 +4,11 @@
 
 log_event() {  # daemon event message... -> one structured line on the daemon's operational log
   local daemon="$1" event="$2"; shift 2
-  local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  # Local time, with the offset, to match every other surface: `daimon status`
+  # and the TUI render "next run" from datetime.now(), and launchd fires clock
+  # schedules on local time too. A UTC log was the only thing needing conversion
+  # before you could line it up with the schedule that produced it.
+  local ts; ts="$(date +%Y-%m-%dT%H:%M:%S%z)"
   printf '%s level=info daemon=%s event=%s msg="%s"\n' \
     "$ts" "$daemon" "$event" "$*"
 }

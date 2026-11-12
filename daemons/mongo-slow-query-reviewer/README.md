@@ -5,7 +5,7 @@
 Review MongoDB Atlas query shapes, find the ones costing the most execution time, and file one Shortcut story per new offender with a proposed index or rewrite.
 
 - **Command:** `/mongo-slow-query-reviewer`
-- **Schedule:** 09:00,16:00 mon-fri
+- **Schedule:** 09:00,16:00
 - **Source:** mongodb, shortcut (read-write)
 - **Required inputs:** `atlas_project_id`, `cluster_name`
 - **Backend:** `claude`

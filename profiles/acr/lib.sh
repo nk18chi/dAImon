@@ -42,6 +42,11 @@ acr_issue_comments() {
 # both halves have to be read and merged. Envelope keys win on the fields that
 # appear in both (it sits at character 0 and survives truncation, which is the
 # whole point of the contract's data-before-prose rule).
+#
+# Each envelope also carries `created_at`, the round comment's own timestamp.
+# The verdict says what the reviewer concluded; the timestamp is what lets a
+# later author reply be recognised as newer than the round it answers, which is
+# the whole basis of acr_answered_rounds.
 acr_round_envelopes() {
   acr_issue_comments "$1" | jq -c --arg ver "$(_acr_ver)" '
     def payload:
@@ -51,12 +56,13 @@ acr_round_envelopes() {
         end;
     [ .[]?
       | (.user.login // "") as $who
+      | (.created_at // "") as $at
       | (.body // "") as $body
       | ($body | split("\n")[0])
       | capture("^<!-- " + $ver + " (?<j>\\{.*\\}) -->\\s*$")?
       | .j | fromjson?
       | select(.kind? == "round")
-      | ($body | payload) + . + { reviewer: $who } ]
+      | ($body | payload) + . + { reviewer: $who, created_at: $at } ]
   ' 2>/dev/null || printf '[]'
 }
 
@@ -213,9 +219,69 @@ acr_dismissed_approvals() {
     || printf '[]'
 }
 
-# acr_reviewers_behind_head <prs-json> <seen-json> -> JSON array of
-# {number, headSha, behind: [login…]} naming, per PR, exactly which instances
-# should be asked to review the current commit ([] on failure).
+# acr_answered_rounds <pr-number> <rounds-json> -> JSON array of
+# {reviewer, round} for each round in <rounds-json> that the PR author has
+# replied to since it was posted ([] on none/failure).
+#
+# The second way a PR goes quiet, and the one head_sha cannot see. A finding you
+# decline rather than fix produces no commit: the head does not move, so the
+# reviewer that raised it is not behind — it has reviewed this exact commit — and
+# every head-based check reads the PR as covered. But the thread has moved. There
+# is an author reply the reviewer has never read, and only the reviewer can
+# retire the finding or push back on the decline. Nothing asks it to look.
+#
+# Declining is the normal outcome of a review round, not a rare one, so this is
+# the common case rather than an edge. Live on 5501: schlenks round 4
+# `request_changes` sitting on the current head, ACR-cad724 declined in a reply,
+# no commit possible, and the gate concluding "holdout ON the current commit, so
+# not askable. Nothing asked."
+#
+# Two things make this harder than reading a login:
+#
+# - **Your own instance posts under your own account.** ACR's "verified
+#   addressed" note and your reply to it are both from you, so the author is not
+#   separable by login. The `acr:v1` marker on line 1 is: bot comments carry it,
+#   yours does not. Without that test the bot answers its own rounds and the gate
+#   never stops asking.
+# - **A reply answers one instance, not the PR.** Threads are keyed by their root
+#   comment, so a reply is attributed to whoever posted the comment it replies
+#   to. Replying to schlenks says nothing to mulvster.
+#
+# The reply must be strictly newer than the round comment. ACR re-raises an open
+# finding in every round, so the reply written to round 3 is already answered by
+# round 4 existing at all; counting it would ask again for a round nobody has
+# answered yet. A round with no timestamp is treated as unanswered — fail closed,
+# as everywhere else here.
+acr_answered_rounds() {
+  local num="$1" rounds="${2:-[]}" out
+  # No open round means nothing to answer, and no reason to spend the call.
+  printf '%s' "$rounds" | jq -e 'length > 0' >/dev/null 2>&1 || { printf '[]'; return; }
+  out="$(gh api "repos/{owner}/{repo}/pulls/$num/comments" --paginate --slurp 2>/dev/null)" \
+    || { printf '[]'; return; }
+  printf '%s' "$out" \
+    | jq -c --argjson rounds "$rounds" --arg ver "$(_acr_ver)" '
+        (if type != "array" then [] elif (.[0]? | type) == "array" then add else . end) as $cs
+        | ([ $cs[] | { key: (.id | tostring), value: (.user.login // "") } ] | from_entries) as $owner
+        | [ $cs[]
+            | select(((.body // "") | split("\n")[0]
+                      | startswith("<!-- " + $ver + " ")) | not)
+            | select(.in_reply_to_id != null)
+            | { reviewer: ($owner[.in_reply_to_id | tostring] // ""),
+                at: (.created_at // "") } ] as $replies
+        | [ $rounds[]
+            | . as $r
+            | select((.created_at // "") != "")
+            | select(any($replies[];
+                         .reviewer == $r.reviewer and .at > $r.created_at))
+            | { reviewer: .reviewer, round: .round } ]
+      ' 2>/dev/null \
+    || printf '[]'
+}
+
+# acr_reviewers_behind_head <prs-json> <seen-json> [max-reply-asks] -> JSON array
+# of {number, headSha, behind: [login…], answered: [{reviewer, round}…]} naming,
+# per PR, exactly which instances should be asked to review the current commit
+# ([] on failure).
 #
 # The per-reviewer counterpart to acr_prs_needing_review, and the one that
 # matters once a PR has more than one instance on it. That helper asks whether
@@ -266,8 +332,31 @@ acr_dismissed_approvals() {
 # the sweep outright: the holdout's own round arrives at a head already recorded
 # as asked, so the moment the PR goes all-approve there would be nothing left
 # that could ask the deferred reviewers.
+#
+# A holdout ON the current head is asked anyway once the author has answered its
+# latest round — see acr_answered_rounds for why that case is invisible to every
+# head-based check. Two things about that path differ from the rest of this
+# helper, and both are load-bearing:
+#
+# - **It dedups on {number, headSha, reviewer, round}, not on `reviewers`.** The
+#   reply arrives at a head this daemon has usually already asked about, so the
+#   reviewer-level key suppresses exactly the case the rule exists for. On 5501
+#   schlenks was already listed under `reviewers` at the head it then re-reviewed.
+#   The round-level record lives in the state row's `answeredRounds`.
+# - **It is capped, at `max-reply-asks` per reviewer per head (default 2).**
+#   Declining a finding the reviewer keeps re-raising is a stable disagreement,
+#   not a convergence — 5501 declined ACR-cad724 and got the identical finding
+#   back as round 4. Every other loop here terminates because a fix moves the
+#   head; a decline never does, so this one needs a counter or it runs until the
+#   PR is merged. Past the cap it is a human's problem, which is the correct
+#   destination for two agents that disagree.
+#
+# `answered` in the result is not decoration: the caller has to write those pairs
+# back to the state row, and it cannot recover a round number from a login. Those
+# reviewers also appear in `behind`, so the asking side needs no special case.
 acr_reviewers_behind_head() {
-  local prs="$1" seen="${2:-[]}" out='[]' num head rounds dismissed hit
+  local prs="$1" seen="${2:-[]}" maxreply="${3:-2}" out='[]'
+  local num head rounds dismissed answered open hit
   while IFS=$'\t' read -r num head; do
     [ -n "$num" ] || continue
     rounds="$(acr_latest_rounds "$num")"
@@ -281,8 +370,17 @@ acr_reviewers_behind_head() {
        ' >/dev/null 2>&1; then
       dismissed="$(acr_dismissed_approvals "$num")"
     fi
+    # Likewise: only a holdout sitting ON the current head can have been answered
+    # rather than fixed. Anything behind is already covered by the head check.
+    answered='[]'
+    open="$(printf '%s' "$rounds" | jq -c --arg head "$head" \
+      '[ .[] | select(.verdict != "approve" and .head_sha == $head) ]' 2>/dev/null)" || open='[]'
+    if printf '%s' "$open" | jq -e 'length > 0' >/dev/null 2>&1; then
+      answered="$(acr_answered_rounds "$num" "$open")"
+    fi
     hit="$(printf '%s' "$rounds" | jq -c \
       --argjson seen "$seen" --argjson dismissed "$dismissed" \
+      --argjson answered "$answered" --argjson maxreply "$maxreply" \
       --arg num "$num" --arg head "$head" '
         ($num | tonumber) as $n
         | . as $rounds
@@ -292,6 +390,10 @@ acr_reviewers_behind_head() {
         | [ $seen[]
             | select((.number? == $n) and (.headSha? == $head))
             | (.reviewers? // [])[] ] as $asked
+        # Already re-asked at this head because the author answered, per round.
+        | [ $seen[]
+            | select((.number? == $n) and (.headSha? == $head))
+            | (.answeredRounds? // [])[] ] as $prev
         | (if ($rounds | length) == 0 then []
            elif ($holdouts | length) > 0
            then [ $behind[]
@@ -301,11 +403,22 @@ acr_reviewers_behind_head() {
            else [ $behind[] | .reviewer ]
            end) as $want
         | [ $want[] | select(. as $w | $asked | index($w) | not) ] as $ask
+        | [ $answered[]
+            | . as $a
+            | select([ $prev[]
+                       | select(.reviewer == $a.reviewer and .round == $a.round) ]
+                     | length == 0)
+            | select([ $prev[] | select(.reviewer == $a.reviewer) ]
+                     | length < $maxreply) ] as $fresh
         | if ($rounds | length) == 0
           then (if ($seen | any((.number? == $n) and (.headSha? == $head)))
-                then empty else { number: $n, headSha: $head, behind: [] } end)
-          elif ($ask | length) == 0 then empty
-          else { number: $n, headSha: $head, behind: ($ask | unique) } end
+                then empty
+                else { number: $n, headSha: $head, behind: [], answered: [] } end)
+          elif (($ask | length) + ($fresh | length)) == 0 then empty
+          else { number: $n, headSha: $head,
+                 behind: (($ask + [ $fresh[].reviewer ]) | unique),
+                 answered: $fresh }
+          end
       ' 2>/dev/null)" || hit=''
     [ -n "$hit" ] || continue
     out="$(printf '%s' "$out" | jq -c --argjson o "$hit" '. + [$o]' 2>/dev/null)" || out='[]'

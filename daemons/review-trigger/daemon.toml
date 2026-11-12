@@ -1,17 +1,20 @@
 [daemon]
 backend = "claude"
 sources = [{ name = "acr", write = true }]
-# Offset from acr-fixer's :5/:25/:45 so the two never race if both are ever
-# enabled. Twenty minutes is also the debounce: a burst of pushes inside one
-# window is a single head by the time the gate looks, so it asks once.
-schedule = { minutes = [0, 20, 40], days = "mon-fri" }
+# Every three minutes, so a pushed head gets its review asked for promptly. The
+# gate is a single gh query and dedupes on headSha, so idle ticks are cheap. The
+# cost is a short debounce: a burst of pushes spread over more than three
+# minutes asks once per head it catches, not once per burst. At this cadence
+# acr-fixer's :25 and :45 runs share a tick; that is harmless, since a head
+# acr-fixer replaces is simply asked for again on the next tick.
+schedule = { minutes = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48, 51, 54, 57] }
 command = "/review-trigger"
 # This daemon reads and posts; it never builds, tests, or pushes. There is
 # nothing here that legitimately takes 45 minutes.
 stuck_after = 900
 # Read by discover.sh; an empty one would crash the gate under `set -u`, which is
 # indistinguishable from "no work" and would disable the daemon silently.
-required_inputs = ["skip_label"]
+required_inputs = ["skip_label", "max_reply_retriggers"]
 
 [inputs]
 # Opt a PR OUT of automated review triggering by adding this label. Shares the
@@ -22,3 +25,10 @@ skip_label = "acr-no-autofix"
 # review of a PR you authored. Machine-local, so set it in daemon.local.toml.
 # Blank = skip that step; other reviewers are still re-requested via gh.
 acr_repo = ""
+# How many times one reviewer may be re-asked at a single commit because you
+# answered its findings in a reply rather than a push. Every other loop in this
+# daemon terminates because a fix moves the head; a decline never moves it, so
+# this path needs a counter of its own. Two rounds of "I decline" / "I re-raise"
+# is a stable disagreement, not a convergence — past that it wants a human, not
+# a third review.
+max_reply_retriggers = 2

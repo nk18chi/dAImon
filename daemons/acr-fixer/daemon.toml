@@ -4,9 +4,10 @@ sources = [{ name = "acr", write = true }]
 schedule = { minutes = [5, 25, 45], days = "mon-fri" }
 command = "/acr-fixer"
 stuck_after = 2700
-# Both are read by discover.sh; an empty one would crash the gate under `set -u`,
-# which is indistinguishable from "no work" and would disable the daemon silently.
-required_inputs = ["skip_label", "max_rounds"]
+# All three are read by discover.sh; an empty one would crash the gate under
+# `set -u`, which is indistinguishable from "no work" and would disable the
+# daemon silently.
+required_inputs = ["skip_label", "max_rounds", "prose_review_marker"]
 
 [inputs]
 # Prefix on every comment this daemon posts, so reply-to-pr-comments can tell its
@@ -18,6 +19,12 @@ skip_label = "acr-no-autofix"
 # Hard stop on the ACR round the daemon will act on. Past this, the PR is parked
 # for a human — a fix that has not converged in this many rounds is not going to.
 max_rounds = 5
+# Substring that identifies a blocking review written as prose rather than the
+# acr:v1 contract. Matched positively so an ACR review is never picked up by it;
+# this default is the heading dAImon's own review-prs daemon emits. Such reviews
+# have no finding ids and no reply protocol, so they are handled per review
+# rather than per finding, and deduped on the GitHub review id.
+prose_review_marker = "## PR Review: #"
 # Path to your ACR checkout, used to re-trigger your OWN instance after a push
 # (`pnpm -C <path> review owner/repo#N`) — the poller never re-queues a completed
 # review of a PR you authored. Machine-local, so set it in daemon.local.toml.

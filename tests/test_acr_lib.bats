@@ -17,17 +17,25 @@ setup() {
 #
 # Any key in the envelope arg that is NOT an envelope field per the contract
 # (verdict, counts, deltas) is moved into the payload block automatically.
+#
+# `at` is not a contract key at all: it sets the comment's own `created_at`,
+# which is what the answered-round check compares an author's reply against.
+# Left out, it defaults to an increasing stamp so a fixture never accidentally
+# ties.
 mk_comments() {
   local who="$1" out='[]' env i=1
   shift
   for env in "$@"; do
     out="$(printf '%s' "$out" | jq -c --arg env "$env" --arg who "$who" --argjson i "$i" '
-      ($env | fromjson) as $all
+      ($env | fromjson) as $raw
+      | ($raw.at // ("2026-08-18T0" + ($i | tostring) + ":00:00Z")) as $at
+      | ($raw | del(.at)) as $all
       | ["kind","pr","round","head_sha","part","of","obsolete","final","error","state_comments","schema_url"] as $envkeys
       | ($all | with_entries(select(.key | IN($envkeys[])))) as $head
       | ($all | with_entries(select(.key | IN($envkeys[]) | not))) as $body
       | . + [{
           id: $i,
+          created_at: $at,
           user: { login: $who },
           body: ("<!-- acr:v1 " + ($head | tojson) + " -->\n\n## Round\n\nprose\n\n"
                  + "<details>\n<summary>Expand payload</summary>\n\n```json\n"
@@ -62,15 +70,39 @@ mk_reviews() {
   printf '%s' "$out"
 }
 
-# stub_gh <comments-json> [reviews-json] -> mock gh dispatching on the API path,
-# so one test can serve both the round comments and the formal reviews. Globals,
-# not locals: the mock is called long after this function has returned.
+# mk_finding <reviewer> <id> <at> -> a one-element pulls-review-comments array
+# holding an ACR finding comment that roots a thread. The `acr:v1` marker on
+# line 1 is load-bearing, not decoration: it is the only thing separating a bot
+# comment from a human one, because your own instance posts under your account.
+mk_finding() {
+  jq -cn --arg who "$1" --argjson id "$2" --arg at "$3" '
+    [{ id: $id, in_reply_to_id: null, created_at: $at, user: { login: $who },
+       body: "<!-- acr:v1 {\"kind\":\"finding\"} -->\n\n**[important]** `ACR-cad724`" }]'
+}
+
+# mk_reply <replier> <id> <root-id> <at> <author|bot> -> a one-element array
+# holding a reply on the thread rooted at <root-id>. `bot` gives it the acr:v1
+# marker (ACR's own "verified addressed" note); `author` leaves it plain.
+mk_reply() {
+  jq -cn --arg who "$1" --argjson id "$2" --argjson root "$3" --arg at "$4" --arg kind "$5" '
+    [{ id: $id, in_reply_to_id: $root, created_at: $at, user: { login: $who },
+       body: (if $kind == "bot"
+              then "<!-- acr:v1 {\"kind\":\"finding\"} -->\n\nverified addressed."
+              else "Not fixed. Declining — out of scope for this PR." end) }]'
+}
+
+# stub_gh <comments-json> [reviews-json] [review-comments-json] -> mock gh
+# dispatching on the API path, so one test can serve the round comments, the
+# formal reviews, and the inline threads at once. Globals, not locals: the mock
+# is called long after this function has returned.
 stub_gh() {
   _GH_COMMENTS="$1"
   _GH_REVIEWS="${2:-[]}"
+  _GH_REVIEW_COMMENTS="${3:-[]}"
   gh() {
     case "${2:-}" in
-      *reviews) printf '%s' "$_GH_REVIEWS" ;;
+      */pulls/*/reviews) printf '%s' "$_GH_REVIEWS" ;;
+      */pulls/*/comments) printf '%s' "$_GH_REVIEW_COMMENTS" ;;
       *) printf '%s' "$_GH_COMMENTS" ;;
     esac
   }
@@ -886,4 +918,210 @@ stub_gh() {
   run acr_reviewers_behind_head \
     '[{"number":5358,"headRefOid":"new222"},{"number":5331,"headRefOid":"new333"}]' '[]'
   [ "$(printf '%s' "$output" | jq -r '[.[].number] | join(",")')" = "5358,5331" ]
+}
+
+# --- answering a holdout that sits on the current head -----------------------
+#
+# The other way a PR goes quiet, and the one the head_sha rule cannot see. A
+# finding you decline rather than fix produces no commit, so the head does not
+# move and the reviewer that raised it is not behind — it has reviewed this
+# exact commit. But the thread has moved: there is now an author reply the
+# reviewer has never read, and only the reviewer can retire the finding or push
+# back on the decline. Nothing asks it to look.
+#
+# Live on 5501: schlenks r4 `request_changes` on the current head, ACR-cad724
+# declined in a reply, no commit possible, and the gate's own state record
+# concluding "holdout ON the current commit, so not askable. Nothing asked."
+#
+# Declining is the normal outcome, not the rare one, so this is not an edge case.
+
+@test "acr_round_envelopes: carries the comment's created_at" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"at":"2026-08-18T22:35:39Z"}')"
+  gh() { printf '%s' "$c"; }
+  run acr_round_envelopes 5501
+  [ "$(printf '%s' "$output" | jq -r '.[0].created_at')" = "2026-08-18T22:35:39Z" ]
+}
+
+@test "acr_answered_rounds: an author reply after the round marks it answered" {
+  local rounds
+  rounds='[{"reviewer":"schlenks","round":4,"created_at":"2026-08-18T22:35:39Z"}]'
+  stub_gh '[]' '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:35:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_answered_rounds 5501 "$rounds"
+  [ "$(printf '%s' "$output" | jq -c '.')" = '[{"reviewer":"schlenks","round":4}]' ]
+}
+
+# The reply has to be newer than the round. ACR re-raises an open finding in
+# every round, so the reply you wrote to round 3 is already answered by round 4
+# existing at all — counting it would ask again for a round nobody has answered.
+@test "acr_answered_rounds: a reply older than the round does not count" {
+  local rounds
+  rounds='[{"reviewer":"schlenks","round":4,"created_at":"2026-08-18T22:35:39Z"}]'
+  stub_gh '[]' '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T20:22:23Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T20:46:42Z author)")"
+  run acr_answered_rounds 5501 "$rounds"
+  [ "$output" = "[]" ]
+}
+
+# Your own ACR instance posts under your own account, so login cannot separate
+# the bot's "verified addressed" note from your reply. The acr:v1 marker can.
+# Without this the bot answers its own rounds and the gate never stops asking.
+@test "acr_answered_rounds: ACR's own reply on the thread is not an author reply" {
+  local rounds
+  rounds='[{"reviewer":"nk18chi","round":4,"created_at":"2026-08-18T19:50:00Z"}]'
+  stub_gh '[]' '[]' "$(mk_multi "$(mk_finding nk18chi 100 2026-08-18T19:49:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T19:56:52Z bot)")"
+  run acr_answered_rounds 5501 "$rounds"
+  [ "$output" = "[]" ]
+}
+
+# A multi-instance PR has several open threads at once. Replying to one
+# instance says nothing to the other, and asking both would spend a review to
+# re-raise a finding nobody has touched.
+@test "acr_answered_rounds: a reply on another instance's thread does not answer this one" {
+  local rounds
+  rounds='[{"reviewer":"schlenks","round":4,"created_at":"2026-08-18T22:35:39Z"},
+           {"reviewer":"mulvster","round":2,"created_at":"2026-08-18T22:35:39Z"}]'
+  stub_gh '[]' '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_answered_rounds 5501 "$rounds"
+  [ "$(printf '%s' "$output" | jq -r '[.[].reviewer] | join(",")')" = "schlenks" ]
+}
+
+@test "acr_answered_rounds: gh failure -> [] (fails closed)" {
+  gh() { return 1; }
+  run acr_answered_rounds 5501 '[{"reviewer":"schlenks","round":4,"created_at":"2026-08-18T22:35:39Z"}]'
+  [ "$output" = "[]" ]
+}
+
+@test "acr_answered_rounds: no rounds -> [] without asking gh" {
+  gh() { printf 'should not be called'; }
+  run acr_answered_rounds 5501 '[]'
+  [ "$output" = "[]" ]
+}
+
+# PR 5501 itself, end to end.
+@test "acr_reviewers_behind_head: an answered holdout at the current head is asked" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' '[]'
+  [ "$(printf '%s' "$output" | jq -r '.[0].behind | join(",")')" = "schlenks" ]
+}
+
+# The rule this narrows, still intact: a holdout nobody has answered has seen
+# this commit and the findings are somebody else's job.
+@test "acr_reviewers_behind_head: an unanswered holdout at the current head is still left alone" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' '[]'
+  [ "$output" = "[]" ]
+}
+
+# An approver has no open finding to answer. A stray reply on a closed thread
+# must not re-queue a review that already said yes.
+@test "acr_reviewers_behind_head: an answered approver at the head is not asked" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"approve","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' '[]'
+  [ "$output" = "[]" ]
+}
+
+# Dedup for this path has to carry the round, not just the reviewer. On 5501 the
+# state already lists schlenks under `reviewers` at this head — from the ask made
+# before it re-reviewed — so a reviewer-level key suppresses the very case the
+# rule exists for.
+@test "acr_reviewers_behind_head: a reviewer-level ask does not suppress the answered path" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' \
+    '[{"number":5501,"headSha":"new222","outcome":"review_requested","reviewers":["schlenks"]}]'
+  [ "$(printf '%s' "$output" | jq -r '.[0].behind | join(",")')" = "schlenks" ]
+}
+
+@test "acr_reviewers_behind_head: an answered round already re-asked is not asked again" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' \
+    '[{"number":5501,"headSha":"new222","outcome":"review_requested","reviewers":["schlenks"],
+       "answeredRounds":[{"reviewer":"schlenks","round":4}]}]'
+  [ "$output" = "[]" ]
+}
+
+# The reviewer came back with a new round on the same commit, and you answered
+# that one too. Keyed on the round, so this is fresh work rather than the ask
+# that was already made.
+@test "acr_reviewers_behind_head: a new round after the re-ask is answerable again" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":5,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-19T01:00:00Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-19T01:01:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-19T02:00:00Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' \
+    '[{"number":5501,"headSha":"new222","outcome":"review_requested","reviewers":["schlenks"],
+       "answeredRounds":[{"reviewer":"schlenks","round":4}]}]'
+  [ "$(printf '%s' "$output" | jq -r '.[0].behind | join(",")')" = "schlenks" ]
+}
+
+# What stops the ping-pong. Declining a finding the reviewer keeps re-raising is
+# a stable disagreement, not a convergence: 5501 declined ACR-cad724 and got the
+# identical finding back as round 4. Without a cap this loops until the head
+# moves, which for a decline it never does. Two asks at one commit, then it is a
+# human's problem.
+@test "acr_reviewers_behind_head: the reply cap stops the ping-pong" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":6,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-19T03:00:00Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-19T03:01:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-19T04:00:00Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' \
+    '[{"number":5501,"headSha":"new222","outcome":"review_requested","reviewers":["schlenks"],
+       "answeredRounds":[{"reviewer":"schlenks","round":4},{"reviewer":"schlenks","round":5}]}]' 2
+  [ "$output" = "[]" ]
+}
+
+# The cap is per reviewer: one instance talked out does not silence another.
+@test "acr_reviewers_behind_head: the cap is per reviewer, not per PR" {
+  local c
+  c="$(mk_multi \
+    "$(mk_comments schlenks '{"kind":"round","round":6,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-19T03:00:00Z"}')" \
+    "$(mk_comments mulvster '{"kind":"round","round":1,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-19T03:00:00Z"}')")"
+  stub_gh "$c" '[]' "$(mk_multi \
+    "$(mk_finding schlenks 100 2026-08-19T03:01:00Z)" \
+    "$(mk_reply nk18chi 101 100 2026-08-19T04:00:00Z author)" \
+    "$(mk_finding mulvster 200 2026-08-19T03:01:00Z)" \
+    "$(mk_reply nk18chi 201 200 2026-08-19T04:00:00Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' \
+    '[{"number":5501,"headSha":"new222","outcome":"review_requested","reviewers":[],
+       "answeredRounds":[{"reviewer":"schlenks","round":4},{"reviewer":"schlenks","round":5}]}]' 2
+  [ "$(printf '%s' "$output" | jq -r '.[0].behind | join(",")')" = "mulvster" ]
+}
+
+# The skill has to write `answeredRounds` back, and it cannot infer the round
+# number from a login. Report the pairs it must record.
+@test "acr_reviewers_behind_head: the answered rounds are reported for the state record" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"new222","at":"2026-08-18T22:35:39Z"}')"
+  stub_gh "$c" '[]' "$(mk_multi "$(mk_finding schlenks 100 2026-08-18T22:36:00Z)" \
+                                "$(mk_reply nk18chi 101 100 2026-08-18T23:21:46Z author)")"
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' '[]'
+  [ "$(printf '%s' "$output" | jq -c '.[0].answered')" = '[{"reviewer":"schlenks","round":4}]' ]
+}
+
+# A reviewer asked for being behind is not asked for being answered, so it must
+# not consume a slot in the reply cap.
+@test "acr_reviewers_behind_head: a behind holdout reports no answered rounds" {
+  local c
+  c="$(mk_comments schlenks '{"kind":"round","round":4,"verdict":"request_changes","final":true,"head_sha":"old111"}')"
+  gh() { printf '%s' "$c"; }
+  run acr_reviewers_behind_head '[{"number":5501,"headRefOid":"new222"}]' '[]'
+  [ "$(printf '%s' "$output" | jq -r '.[0].behind | join(",")')" = "schlenks" ]
+  [ "$(printf '%s' "$output" | jq -c '.[0].answered')" = "[]" ]
 }

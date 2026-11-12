@@ -1,9 +1,9 @@
 [daemon]
 backend = "claude"
-# Twice a day on weekdays, 09:00 and 16:00 local. Query Shape Insights aggregates
+# Twice a day, every day, 09:00 and 16:00 local. Query Shape Insights aggregates
 # over a 24h window and moves slowly, so a tighter cadence mostly rediscovers
 # shapes already filed. launchd fires on LOCAL time and follows DST.
-schedule = { at = ["09:00", "16:00"], days = "mon-fri" }
+schedule = { at = ["09:00", "16:00"] }
 command = "/mongo-slow-query-reviewer"
 stuck_after = 1800
 required_inputs = ["atlas_project_id", "cluster_name"]

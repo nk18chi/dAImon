@@ -50,8 +50,14 @@ prs="$(gh_pr_json --author @me --state open \
 
 seen="$(load_seen_state "$(state_file review-trigger)")"
 
-# Deduped on headSha, which is what stops it asking again every twenty minutes
+# Deduped on headSha, which is what stops it asking again every three minutes
 # while a review sits queued. A new push produces a new head and asks again.
-behind="$(acr_reviewers_behind_head "$prs" "$seen")"
+#
+# Also picks up the holdouts sitting ON the current head whose findings you
+# answered in a reply instead of a commit — declining is the normal outcome of a
+# round, and it moves no head, so nothing else in this daemon can see it. That
+# path is capped per reviewer per head, since a decline the reviewer keeps
+# re-raising never terminates on its own.
+behind="$(acr_reviewers_behind_head "$prs" "$seen" "$DAIMON_INPUT_MAX_REPLY_RETRIGGERS")"
 
 printf '%s' "$behind" | jq -e 'length > 0' >/dev/null

@@ -14,7 +14,7 @@ Review recent Datadog error logs, cluster them by root cause, and file one Short
 
 | Input | Default | Notes |
 |-------|---------|-------|
-| `log_query` | `status:error service:CHANGE_ME` | Datadog log-search query the gate and skill run. Scope it to your service and the error level you care about, e.g. "status:error service:web env:prod". |
+| `log_query` | `status:error service:CHANGE_ME` | Datadog log-search query the gate and skill run. Scope it to your service and the error level you care about, e.g. "status:error service:web env:prod".  If another daemon in this fleet watches a slice of the same logs, exclude that slice here. Daemons dedupe only against their own state file and cannot see each other's stories, so an overlap is not a near-duplicate — it is one ticket per daemon, every time. hubspot-log-reviewer owns the HubSpot slice, which is why the local query for this machine carries `-hubspot`. |
 | `bot_marker` | `🤖` | Prefix on every Shortcut story this daemon creates, so its stories are identifiable and reply/triage daemons can tell them apart. |
 | `max_new_stories` | `5` | Most new error clusters to file as stories in a single run — caps the blast radius of a log spike. Clusters beyond this wait for the next run. |
 

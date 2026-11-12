@@ -1,12 +1,12 @@
 [daemon]
 backend = "claude"
-# 09:00 Pacific on weekdays. launchd fires on LOCAL time and follows DST, and this
+# 09:00 Pacific, every day. launchd fires on LOCAL time and follows DST, and this
 # machine runs Pacific, so a bare "09:00" is already Pacific year-round.
 # The property reconciliation workflow runs once a day and stamps its runId with
 # the date (hubspot-property-reconciliation-YYYY-MM-DD); observed completion is
 # ~08:30 UTC / ~01:30 PT, so 09:00 PT always sees a finished report. A tighter
 # cadence only rediscovers the same day's clusters.
-schedule = { at = ["09:00"], days = "mon-fri" }
+schedule = { at = ["09:00"] }
 command = "/hubspot-reconciliation-reviewer"
 stuck_after = 1800
 required_inputs = ["log_query", "lookback"]

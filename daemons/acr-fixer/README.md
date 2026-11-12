@@ -7,7 +7,7 @@ Close out ACR review findings on your open PRs — fix each one on the PR branch
 - **Command:** `/acr-fixer`
 - **Schedule:** :5,25,45 mon-fri
 - **Source:** acr (read-write)
-- **Required inputs:** `skip_label`, `max_rounds`
+- **Required inputs:** `skip_label`, `max_rounds`, `prose_review_marker`
 - **Backend:** `claude`
 
 ## Inputs
@@ -17,6 +17,7 @@ Close out ACR review findings on your open PRs — fix each one on the PR branch
 | `bot_marker` | `🤖` | Prefix on every comment this daemon posts, so reply-to-pr-comments can tell its own comments from human replies. |
 | `skip_label` | `acr-no-autofix` | Opt a PR OUT of automated fixing by adding this label. Default-on is deliberate: every PR ACR reviews is one this daemon should try to close out. |
 | `max_rounds` | `5` | Hard stop on the ACR round the daemon will act on. Past this, the PR is parked for a human — a fix that has not converged in this many rounds is not going to. |
+| `prose_review_marker` | `## PR Review: #` | Substring that identifies a blocking review written as prose rather than the acr:v1 contract. Matched positively so an ACR review is never picked up by it; this default is the heading dAImon's own review-prs daemon emits. Such reviews have no finding ids and no reply protocol, so they are handled per review rather than per finding, and deduped on the GitHub review id. |
 | `acr_repo` | — | Path to your ACR checkout, used to re-trigger your OWN instance after a push (`pnpm -C <path> review owner/repo#N`) — the poller never re-queues a completed review of a PR you authored. Machine-local, so set it in daemon.local.toml. Blank = skip that step; other reviewers are still re-requested via gh. |
 | `max_prs_per_run` | `3` | Per-run cap on PRs to work through, newest-verdict first. Keeps one run bounded. |
 | `max_findings_per_pr` | `20` | Findings to attempt on a single PR in one run. Beyond this, fix the rest next round rather than pushing one enormous commit. |

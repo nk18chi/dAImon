@@ -84,6 +84,7 @@ class DaemonCtl(App):
     #panel-config { height: auto; max-height: 45%; border: round $surface-lighten-2; padding: 0 1; }
     #panel-status { height: auto; border: round $surface-lighten-2; padding: 0 1; }
     #panel-procs { height: auto; border: round $surface-lighten-2; padding: 0 1; }
+    #panel-work { height: auto; max-height: 30%; border: round $surface-lighten-2; padding: 0 1; }
     #panel-log { height: 1fr; border: round $surface-lighten-2; padding: 0 1; }
     #list { height: 1fr; background: transparent; }
     #legend { height: auto; padding: 0; margin: 0; }
@@ -132,6 +133,8 @@ class DaemonCtl(App):
                     yield Static(id="config-body")
                 yield Static(id="panel-status")
                 yield Static(id="panel-procs")
+                with VerticalScroll(id="panel-work"):
+                    yield Static(id="work-body")
                 with VerticalScroll(id="panel-log"):
                     yield Static(id="log-body")
         yield Footer()
@@ -143,6 +146,7 @@ class DaemonCtl(App):
         self.table.add_columns("st", "daemon", "be")
         self.query_one("#panel-status").border_title = "launchd"
         self.query_one("#panel-procs").border_title = "processes"
+        self.query_one("#panel-work").border_title = "work · newest first"
         self.query_one("#panel-log").border_title = "log · newest first"
         self.slugs: list[str] = []
         self.filter_text = ""
@@ -198,10 +202,11 @@ class DaemonCtl(App):
         self.query_one("#config-body", Static).update(detail.render_config(cfg, slug))
         self.query_one("#panel-status", Static).update(detail.render_status(cfg, slug))
         self.query_one("#panel-procs", Static).update(detail.render_procs(cfg, slug))
+        self.query_one("#work-body", Static).update(detail.render_work(cfg, slug))
         self.query_one("#log-body", Static).update(detail.render_log(cfg, slug))
 
     def _clear_panels(self, allslugs: list[str] | None) -> None:
-        for wid in ("#panel-status", "#panel-procs", "#log-body"):
+        for wid in ("#panel-status", "#panel-procs", "#work-body", "#log-body"):
             self.query_one(wid, Static).update("")
         if allslugs is not None and not allslugs:
             msg = "[dim]No daemons yet.[/dim]\n\nPress [bold]n[/bold] to build one with Claude."
