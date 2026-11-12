@@ -113,6 +113,15 @@ yours"; each run starts the next until the queue is empty. Each run pays a short
 startup (roughly 20–30 seconds), so a long queue drains steadily rather than
 all at once.
 
+**Daily limits.** Each person can ask 30 questions a day, and everyone
+together 100 (`BRIDGE_ASK_DAILY_LIMIT` and `BRIDGE_ASK_DAILY_TEAM_LIMIT` in
+the bridge's `.env`). The limit caps what a stolen Slack session could pull out
+or cost before someone notices. The bridge enforces it before a question is
+queued, so a refused question starts no run. The first refusal of the day gets
+one reply in the thread; after that the bot stays quiet, so a flood can't make
+it spam the channel. Every refusal is logged in the bridge log. Counts reset at
+local midnight and survive a bridge restart.
+
 **Setup** (start with a throwaway test channel):
 
 1. Create the channel and invite the bot (`/invite @<your-bot>`). slack-ask
