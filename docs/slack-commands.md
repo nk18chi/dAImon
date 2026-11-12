@@ -119,7 +119,11 @@ all at once.
    doesn't use the Slack MCP: the bridge hands it the thread and posts its
    reply as the bot.
 2. Put the channel ID in env-bridge's `.env` as `BRIDGE_ASK_CHANNELS`, and
-   restart `daimon bridge`.
+   restart the bridge. To run it without a terminal, use
+   `daimon bridge service install` (see the
+   [env-bridge README](../bridges/env-bridge/README.md#running-it-in-the-background)).
+   Do this *before* inviting the bot to a real channel: a mention in a channel
+   not listed here goes to `slack-commands` instead.
 3. Copy `daemons/slack-ask/daemon.local.toml.example` to `daemon.local.toml`:
    a dedicated clone as `working_dir`, the channel in `channel_playbooks`, and
    the read-only data tools you want in `tools`. If the clone has a

@@ -46,6 +46,28 @@ bot's unique name.
    approval may be required) and starts the local Socket Mode process.
 4. Try `<your-slash> help` in Slack, or `@<your-bot> help`.
 
+## Running it in the background
+
+`slack run` stops when its terminal closes. To keep the bridge up without a
+terminal, run it as a launchd service: it starts at login, restarts if it
+exits, and logs to `~/.local/state/daimon/logs/bridge.log`. It still runs
+only while your Mac is awake.
+
+1. Add your app's two tokens to `.env` (from your app's page on
+   api.slack.com). The service runs `node app.js` itself, so it needs what
+   `slack run` normally supplies:
+   - `SLACK_BOT_TOKEN=xoxb-…` — *OAuth & Permissions* → Bot User OAuth Token.
+   - `SLACK_APP_TOKEN=xapp-…` — *Basic Information* → App-Level Tokens →
+     Generate, with scope `connections:write`. Leave token rotation off: a
+     rotated token expires and the service can't renew it.
+2. `daimon bridge service install`. It refuses, saying what's missing, until
+   both tokens and the setup above are in place.
+3. Stop any `slack run` terminal, so only one bridge is connected.
+
+`daimon bridge service status` shows whether it's running;
+`daimon bridge service uninstall` removes it. Re-run `install` after
+upgrading Node: the service points at the `node` that was on your PATH.
+
 ## Configuration (env)
 
 | Variable | Default | Purpose |
@@ -55,7 +77,9 @@ bot's unique name.
 | `BRIDGE_ASK_CHANNELS` | — | Comma-separated channel IDs where an @-mention is a free-form question for the `slack-ask` daemon instead of a command (see [docs/slack-commands.md](../../docs/slack-commands.md)) |
 | `DAIMON_STATE_DIR` | `~/.local/state/daimon` | Where the daimon inbox lives |
 | `DAIMON_BIN` | `~/.local/bin/daimon` | The daimon CLI used to nudge the daemon |
-| `DAIMON_NS` | `daimon` | dAImon's `core.namespace`; the bridge checks the `<namespace>-slack-ask` session to tell a new question how many are ahead of it |
+| `DAIMON_NS` | `daimon` | dAImon's `core.namespace`; the bridge checks the `<namespace>-slack-ask` session to tell a new question how many are ahead of it (the service sets it for you) |
+| `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | — | Only for the background service (`slack run` supplies them otherwise) — see above |
+| `BRIDGE_LOG_LEVEL` | `debug` | Bolt log level; the service uses `info` |
 
 `manifest.json` is generated (`npm run manifest`) and untracked — the
 committed source of truth is `manifest.template.json`.

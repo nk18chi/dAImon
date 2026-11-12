@@ -283,12 +283,24 @@ def render_watchdog_plist(cfg: Config) -> str:
     )
 
 
-def render_plist_raw(label, program, working_dir, schedule_xml, log) -> str:
+def render_plist_raw(
+    label, program, working_dir, schedule_xml, log, *, keep_alive=False, extra_env=None
+) -> str:
+    """A LaunchAgent plist. Scheduled jobs (the default) don't run at load; a
+    keep_alive service starts at load and is restarted whenever it exits."""
     args = "\n".join(f"        <string>{escape(a)}</string>" for a in program)
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "SSH_AUTH_SOCK") if os.environ.get(k)}
+    env.update(extra_env or {})
     env_xml = "\n".join(
-        f"        <key>{k}</key>\n        <string>{escape(os.environ[k])}</string>"
-        for k in ("PATH", "HOME", "SSH_AUTH_SOCK")
-        if os.environ.get(k)
+        f"        <key>{k}</key>\n        <string>{escape(v)}</string>" for k, v in env.items()
+    )
+    run_xml = (
+        "    <key>RunAtLoad</key>\n    <true/>\n"
+        "    <key>KeepAlive</key>\n    <true/>\n"
+        # A crash loop (bad token, no network) retries every 30s, not every 10s.
+        "    <key>ThrottleInterval</key>\n    <integer>30</integer>"
+        if keep_alive
+        else "    <key>RunAtLoad</key>\n    <false/>"
     )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -311,8 +323,7 @@ def render_plist_raw(label, program, working_dir, schedule_xml, log) -> str:
     <dict>
 {env_xml}
     </dict>
-    <key>RunAtLoad</key>
-    <false/>
+{run_xml}
 </dict>
 </plist>
 """
