@@ -1,5 +1,6 @@
 import { ASK_CHANNELS } from '../lib/ask-channels.js';
 import { enqueueCommand } from '../lib/enqueue.js';
+import { checkAndCount, refusalText } from '../lib/limits.js';
 import { ackText, isRunning } from '../lib/queue.js';
 
 const THREAD_LIMIT = 50;
@@ -36,6 +37,12 @@ export async function appMention({ event, client, say, logger }) {
   if (!ask) {
     await enqueueCommand(msg, logger);
     await say({ thread_ts: threadTs, text: `:hourglass_flowing_sand: on it — \`${text}\`` });
+    return;
+  }
+  const limit = await checkAndCount(event.user ?? 'unknown');
+  if (!limit.allowed) {
+    logger?.warn(`ask limit: refused ${event.user} in ${event.channel} (${limit.reason} daily limit)`);
+    if (limit.notify) await say({ thread_ts: threadTs, text: refusalText(limit.reason) });
     return;
   }
   msg.thread = await readThread(client, event.channel, threadTs, logger);

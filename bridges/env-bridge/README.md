@@ -77,6 +77,8 @@ upgrading Node: the service points at the `node` that was on your PATH.
 | `BRIDGE_NAME` | `env-bridge` | App + bot display name (make it yours) |
 | `BRIDGE_SLASH_COMMAND` | `/hub` | Slash command — must be workspace-unique |
 | `BRIDGE_ASK_CHANNELS` | — | Comma-separated channel IDs where an @-mention is a free-form question for the `slack-ask` daemon instead of a command (see [docs/slack-commands.md](../../docs/slack-commands.md)) |
+| `BRIDGE_ASK_DAILY_LIMIT` | `30` | Questions one person may ask in the ask channels per day (local midnight to midnight) |
+| `BRIDGE_ASK_DAILY_TEAM_LIMIT` | `100` | Questions everyone together may ask per day |
 | `DAIMON_STATE_DIR` | `~/.local/state/daimon` | Where the daimon inbox lives |
 | `DAIMON_BIN` | `~/.local/bin/daimon` | The daimon CLI used to nudge the daemon |
 | `DAIMON_NS` | `daimon` | dAImon's `core.namespace`; the bridge checks the `<namespace>-slack-ask` session to tell a new question how many are ahead of it (the service sets it for you) |
