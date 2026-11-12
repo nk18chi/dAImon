@@ -65,7 +65,9 @@ only while your Mac is awake.
 3. Stop any `slack run` terminal, so only one bridge is connected.
 
 `daimon bridge service status` shows whether it's running;
-`daimon bridge service uninstall` removes it. Re-run `install` after
+`daimon bridge service uninstall` removes it. The control panel
+(`daimon tui`) shows the same under the daemon list — "slack bridge" running
+or off — and `B` starts or stops it (stopping asks first). Re-run `install` after
 upgrading Node: the service points at the `node` that was on your PATH.
 
 ## Configuration (env)

@@ -38,6 +38,7 @@ MANAGE_ITEMS = [
     ("log", "l   tail the log"),
     ("kill", "    kill the running session"),
     ("throttle", "t   cycle throttle"),
+    ("bridge", "B   start / stop the Slack bridge"),
     ("pause_all", "P   pause all"),
     ("resume_all", "R   resume all"),
 ]
@@ -58,6 +59,7 @@ HELP_ITEMS = [
     ("l", "tail the log"),
     ("t", "cycle throttle (off→moderate→severe→halt)"),
     ("P / R", "pause all / resume all"),
+    ("B", "start / stop the Slack bridge (env-bridge service)"),
     ("m", "manage menu"),
     ("f", "refresh"),
     ("? / q", "help / quit"),
@@ -67,6 +69,7 @@ CONFIRM = {
     "kill": "Kill the running session for '{slug}'?",
     "unregister": "Unregister '{slug}' — unload and delete its plist?",
 }
+STOP_BRIDGE = "Stop the Slack bridge? Mentions get no reply until it's started again."
 
 # Distinct shapes so state reads without relying on colour (legend under the list).
 RUN, IDLE = "●", "·"
@@ -87,6 +90,7 @@ class DaemonCtl(App):
     #panel-log { height: 1fr; border: round $surface-lighten-2; padding: 0 1; }
     #list { height: 1fr; background: transparent; }
     #legend { height: auto; padding: 0; margin: 0; }
+    #bridge { height: auto; padding: 0; margin: 0 0 1 0; }
     DataTable > .datatable--cursor { background: $accent 40%; text-style: bold; }
     #filter { display: none; border: none; height: 1; padding: 0; margin: 0; }
     .filtering #filter { display: block; }
@@ -118,6 +122,7 @@ class DaemonCtl(App):
         Binding("l", "log", "log", show=False),
         Binding("P", "pause_all", "pause all", show=False),
         Binding("R", "resume_all", "resume all", show=False),
+        Binding("B", "bridge", "bridge", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -125,6 +130,7 @@ class DaemonCtl(App):
         with Horizontal(id="main"):
             with Vertical(id="sidebar"):
                 yield DataTable(id="list")
+                yield Static(id="bridge")
                 yield Static(LEGEND, id="legend")
                 yield Input(placeholder="filter…", id="filter")
             with Vertical(id="detail-col"):
@@ -165,6 +171,31 @@ class DaemonCtl(App):
         )
         return f"[{colour}]{glyph} {slug}[/{colour}]"
 
+    def _bridge_markup(self, cfg, listing: str) -> str:
+        status, pid = state.bridge_state(cfg, listing)
+        if status == "running":
+            return f"[green]{RUN} slack bridge[/green] [dim]pid {pid} · B stop[/dim]"
+        if status == "loaded":
+            return f"[yellow]{REGISTERED} slack bridge[/yellow] [dim]restarting · B stop[/dim]"
+        return f"[dim]{UNREG} slack bridge off · B start[/dim]"
+
+    def action_bridge(self) -> None:
+        cfg = config.Config.load()
+        if state.bridge_state(cfg)[0] == "off":
+            self._bridge_op("install")
+            return
+
+        def done(ok: bool | None) -> None:
+            if ok:
+                self._bridge_op("uninstall")
+
+        self.push_screen(ConfirmScreen(STOP_BRIDGE), done)
+
+    def _bridge_op(self, action: str) -> None:
+        ok, out = ops.bridge(action)
+        self.notify(out or action, severity="information" if ok else "error", timeout=8)
+        self.refresh_table()
+
     def _be(self, backend: str) -> str:
         return {"claude": "cld", "codex": "cdx"}.get(backend, backend)
 
@@ -190,6 +221,7 @@ class DaemonCtl(App):
         count = f"{len(self.slugs)}/{len(allslugs)}" if flt else str(len(allslugs))
         self.query_one("#sidebar").border_title = f"daemons ({count})"
         self.sub_title = f"throttle={state.throttle_level(cfg)}  ·  {len(allslugs)} daemons"
+        self.query_one("#bridge", Static).update(self._bridge_markup(cfg, loaded))
         if self.slugs:
             self.table.move_cursor(row=min(row, len(self.slugs) - 1))
         self._update_detail(allslugs, cfg)

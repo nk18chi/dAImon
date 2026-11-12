@@ -50,6 +50,19 @@ def launchd_loaded(label: str, text: str | None = None) -> bool:
     return any(label in line for line in listing.splitlines())
 
 
+def bridge_state(cfg, listing: str | None = None) -> tuple[str, str | None]:
+    """The env-bridge service from `launchctl list` (PID, status, label per line;
+    PID "-" = loaded but not running): ("running", pid) | ("loaded", None) |
+    ("off", None)."""
+    label = f"com.{cfg.core['namespace']}.bridge"
+    text = listing if listing is not None else sh("launchctl", "list")
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] == label:
+            return ("running", parts[0]) if parts[0].isdigit() else ("loaded", None)
+    return ("off", None)
+
+
 def plist_path(cfg, slug: str) -> Path:
     return Path(os.path.expanduser(f"~/Library/LaunchAgents/{label_for(cfg, slug)}.plist"))
 
