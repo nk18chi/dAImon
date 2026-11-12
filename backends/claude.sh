@@ -17,11 +17,21 @@ backend_cli_args() {  # model danger(0/1) session_name -> args after the binary
   # repo cannot widen its own permissions. A CLI flag is the one thing that wins.
   if [ "$danger" = "1" ]; then flag="--dangerously-skip-permissions"
   else flag="--permission-mode auto"; fi
+  # A tools allowlist overrides both: dontAsk denies anything unlisted instead
+  # of prompting. No settings files load at all — the repo's or the user's own
+  # allow rules would widen the list — so dAImon's hooks, the allowlisted MCP
+  # servers, and the daemon's own skill (user skills don't load either) come
+  # from DAIMON_RESTRICTED_DIR (see lib/restricted_claude.py).
+  # DAIMON_D_TOOLS is already shell-quoted words (see config.py).
+  if [ -n "${DAIMON_D_TOOLS:-}" ]; then
+    local r="${DAIMON_RESTRICTED_DIR:?restricted dir not built}"
+    flag="--permission-mode dontAsk --setting-sources '' --settings '$r/settings.json' --mcp-config '$r/mcp.json' --strict-mcp-config --plugin-dir '$r/plugin' --allowedTools ${DAIMON_D_TOOLS}"
+  fi
   [ -n "${DAIMON_MCP_CONFIG:-}" ] && mcp="--mcp-config ${DAIMON_MCP_CONFIG} --strict-mcp-config"
   printf '%s --model %s -n %s %s' "$flag" "$model" "$session_name" "$mcp"
 }
 
-backend_ready_regex() {  # 1 if danger -> bypass banner, else the idle input prompt
+backend_ready_regex() {  # the mode banner (allowlist, then danger), else the idle input prompt
   # Newer Claude Code UIs replace the "? for shortcuts" hint with a mode line
   # (e.g. "⏸ manual mode on · ← for agents"); accept either as the idle prompt.
   # The mode line names the active permission mode ("manual mode on", "auto mode
@@ -29,7 +39,13 @@ backend_ready_regex() {  # 1 if danger -> bypass banner, else the idle input pro
   # Match the shared "mode on" suffix rather than enumerating each label — a mode
   # we fail to match makes the launcher wait out ready_timeout and boot_fail
   # without ever sending the command, which looks identical to a dead agent.
-  if [ "${1:-1}" = "1" ]; then echo "bypass permissions"; else echo "for shortcuts|mode on|accept edits"; fi
+  if [ -n "${DAIMON_D_TOOLS:-}" ]; then echo "don't ask on"
+  elif [ "${1:-1}" = "1" ]; then echo "bypass permissions"
+  else echo "for shortcuts|mode on|accept edits"; fi
 }
 
 backend_completion_mode() { echo "hook"; }
+
+backend_exhausted_regex() {
+  echo "you('ve| have) hit your ((weekly|monthly)[[:space:]]+)?((usage|spend)[[:space:]]+)?limit"
+}

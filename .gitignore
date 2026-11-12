@@ -8,3 +8,4 @@ config/daimon.toml
 daemons/*/daemon.local.toml
 profiles/*/profile.local.toml
 .claude/settings.local.json
+daemons/*/commands.local/

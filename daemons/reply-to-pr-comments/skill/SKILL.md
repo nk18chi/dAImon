@@ -18,8 +18,8 @@ Find comment threads where:
   any other login counts, whether human or another bot. (Comparing against your
   login also stops you replying to your own bot comments.)
 
-Track the last processed comment id per thread in `$DAIMON_STATE_FILE` (JSON) so
-re-runs only pick up genuinely new replies.
+Track the last processed comment id per thread in your state (JSON, via
+`daimon state get`/`set`) so re-runs only pick up genuinely new replies.
 
 ## 2. Respond to each thread
 
@@ -45,8 +45,8 @@ re-triggers review-prs on its own) — clear that PR's entry from review-prs's s
 so it re-reviews and re-decides at the current head:
 
 ```bash
-RP="$DAIMON_STATE_DIR/state/review-prs.json"
-[ -f "$RP" ] && tmp="$(mktemp)" && jq 'map(select(.number != <N>))' "$RP" > "$tmp" && mv "$tmp" "$RP"
+cur="$(daimon state get review-prs)"
+[ -n "$cur" ] && printf '%s' "$cur" | jq 'map(select(.number != <N>))' | daimon state set review-prs
 ```
 
 On its next run (every 60s) review-prs sees the PR as unreviewed and posts an
@@ -55,5 +55,5 @@ replies (thanks, acknowledgements) — only when the verdict could actually chan
 
 ## 4. Finish
 
-Write the latest processed comment id per thread back to `$DAIMON_STATE_FILE`.
+Write the latest processed comment id per thread back with `daimon state set`.
 Summarize how many threads you replied to and any PRs you queued for re-review.

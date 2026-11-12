@@ -33,9 +33,18 @@ curl -s -G https://api.app.shortcut.com/api/v3/search/stories \
   -H "Shortcut-Token: $TOKEN"
 ```
 
-The search `query` supports `state:"…"`, `label:"…"`, `team:"…"`, `owner:`, and
-negation with `!`. Each result has `id`, `name`, `description`, `app_url`, and its
-current `labels`.
+The search `query` supports `state:"…"`, `label:"…"`, `team:"…"`, `owner:`,
+`epic:<id>`, and negation with `!`. Each result has `id`, `name`, `description`,
+`app_url`, and its current `labels`.
+
+### Out-of-scope epics
+
+**Excluded epics:** `{{inputs.exclude_epics}}` — blank means none are excluded.
+
+Any epic listed there is **out of scope**: another daemon owns it. Append one
+`!epic:<id>` term per id to every search, and drop any story whose `epic_id` is in
+the list even if it reaches you another way. This is scope, not preference — never
+comment on, label, or implement a story belonging to an excluded epic.
 
 ### Scope — only act on the owner's stories
 

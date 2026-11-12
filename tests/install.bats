@@ -62,3 +62,20 @@ run_install() {
   run_install
   [ "$status" -eq 0 ]
 }
+
+@test "install: --worklog links the hook and merges SessionEnd once" {
+  run env HOME="$SBOX" DAIMON_SKIP_TUI_VENV=1 bash "$ROOT/bin/daimon-install" --worklog
+  [ "$status" -eq 0 ]
+  [ -L "$SBOX/.claude/hooks/standup-worklog.sh" ]
+  grep -q 'standup-worklog.sh' "$SBOX/.claude/settings.json"
+  run env HOME="$SBOX" DAIMON_SKIP_TUI_VENV=1 bash "$ROOT/bin/daimon-install" --worklog
+  [ "$status" -eq 0 ]
+  count="$(grep -c 'standup-worklog.sh' "$SBOX/.claude/settings.json")"
+  [ "$count" -eq 1 ]
+}
+
+@test "install: without --worklog the hook is not installed" {
+  run_install
+  [ ! -e "$SBOX/.claude/hooks/standup-worklog.sh" ]
+  ! grep -q 'standup-worklog' "$SBOX/.claude/settings.json"
+}

@@ -23,7 +23,7 @@ gh pr list --author @me --state open \
   --json number,title,headRefName,reviewDecision,mergeable,isDraft,labels,statusCheckRollup,url
 ```
 
-Keep only managed PRs. `$DAIMON_STATE_FILE` is your durable JSON memory across
+Keep only managed PRs. Your durable JSON memory (via `daimon state get`/`set`) spans
 runs — read it now. For each managed PR it records the last action, fix-cycle
 count, and (for parked PRs) `ci_blocked_at`. **Skip** any PR marked `ci_blocked`
 whose `ci_blocked_at` is less than `{{inputs.blocked_recheck_hours}}` hours ago —
@@ -62,7 +62,7 @@ If a managed PR is a draft, all checks pass (no FAILURE/PENDING), it is not
 
 - `gh pr ready <n>`, then request the reviewers (§3.5).
 - Post `{{inputs.bot_marker}} Auto-promoted from draft — CI green, no conflicts.
-  Flagging for review.` and record `promoted` in `$DAIMON_STATE_FILE`.
+  Flagging for review.` and record `promoted` with `daimon state set`.
 
 Promotion does **not** merge — the PR still needs an approving review to reach
 §3.1. Leave it ready and move on.
@@ -86,7 +86,7 @@ When the merge condition holds:
   this run — log it and leave the PR ready. (Window gates merging only; keep
   doing 3.2–3.4 on other PRs regardless of time.)
 - Otherwise merge: `gh pr merge <n> --{{inputs.merge_method}} --delete-branch`,
-  then record `merged` in `$DAIMON_STATE_FILE`.
+  then record `merged` with `daimon state set`.
 
 ### 3.2 Resolve conflicts
 
@@ -120,7 +120,7 @@ Classify the failure:
 
 Budget: at most `{{inputs.max_fix_cycles}}` fix cycles per PR per run. If still
 red after that and it isn't pre-existing, comment the failure, then record
-`ci_blocked` with `ci_blocked_at` = now (ISO-8601 UTC) in `$DAIMON_STATE_FILE`
+`ci_blocked` with `ci_blocked_at` = now (ISO-8601 UTC) via `daimon state set`
 and move on.
 
 ### 3.4 Address change requests
@@ -168,6 +168,30 @@ Remove the worktree when done: `git -C "$ROOT" worktree remove --force ".worktre
 
 ## 5. Pushing
 
+### Check the PR's declared scope first
+
+Some PRs are opened by a daemon that recorded which paths the change is allowed to
+affect, because this repo derives what it builds and deploys from the change
+itself. You have no allowlist of your own — the scope belongs to the PR, so ask
+for it by PR. From inside the worktree, before pushing:
+
+```bash
+daimon check-scope --pr <pr-url> origin/{{inputs.base}}
+```
+
+- **exit 0** — the PR declares no scope (the common case, nothing to enforce), or
+  your fix stayed inside it. Push normally.
+- **exit 1** — your fix reaches outside what this PR may affect. **Do not push.**
+  Drop the out-of-scope edits and re-run the check. If the fix genuinely cannot be
+  made without them, leave the PR untouched, comment with the exact `check-scope`
+  output prefixed by `{{inputs.bot_marker}}`, and move on to the next PR.
+- **exit 2** — it could not tell. Treat that as a refusal to push and say why.
+
+Pushing past a failed check is how one migration becomes a release of unrelated
+apps. Never edit or work around the guard to get a push through.
+
+### Then push
+
 Run `git push` as a **standalone** command (not chained), allowing a long timeout
 — pre-push hooks can legitimately take a minute or more. Treat the push as failed
 only on `remote: Permission to … denied` (real auth failure — report, don't
@@ -178,6 +202,6 @@ force-push. Retry a transient failure once, no more.
 
 ## 6. Finish
 
-Write each managed PR's current state back to `$DAIMON_STATE_FILE`, remove any
+Write each managed PR's current state back with `daimon state set`, remove any
 leftover `pm-*` worktrees, and summarize: which PRs you merged, fixed, or parked,
 and why.

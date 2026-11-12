@@ -34,6 +34,16 @@ shortcut_mention() {
     | python3 -c "import sys,json;m=json.load(sys.stdin);p=m.get('profile') or {};print(p.get('mention_name') or m.get('mention_name') or '')" 2>/dev/null
 }
 
+# shortcut_exclusions -> query terms excluding every epic id in
+# $DAIMON_INPUT_EXCLUDE_EPICS (space-separated), e.g. " !epic:1234". Empty when
+# unset, so a gate can append it unconditionally. The search DSL takes the epic
+# id directly; `epic_id:` is not an operator and matches nothing.
+shortcut_exclusions() {
+  local id out=""
+  for id in ${DAIMON_INPUT_EXCLUDE_EPICS:-}; do out="$out !epic:$id"; done
+  printf '%s' "$out"
+}
+
 # shortcut_owner_count "<base query>" -> story count scoped to $DAIMON_INPUT_OWNER
 # (owner + requester), or workspace-wide if OWNER is unset. When OWNER is set but
 # its mention can't be resolved it writes to stderr and returns 1, so run.sh

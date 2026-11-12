@@ -13,7 +13,9 @@ from pathlib import Path
 INSTALL_ROOT = Path(__file__).resolve().parent.parent
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
-SKIP_DIRS = {".venv", "node_modules", "__pycache__", ".git"}
+# commands.local holds gitignored per-machine command plugins — their prose is
+# operator-authored and must not gate the repo's link check.
+SKIP_DIRS = {".venv", "node_modules", "__pycache__", ".git", "commands.local"}
 
 
 def _md_files(root: Path) -> list[Path]:

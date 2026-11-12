@@ -24,3 +24,7 @@ backend_cli_args() {  # model danger(0/1) session_name -> args after the binary
 backend_ready_regex() { echo ""; }  # one-shot: no interactive banner to wait for
 
 backend_completion_mode() { echo "oneshot"; }
+
+backend_exhausted_regex() {
+  echo "(usage limit|rate limit|quota) (reached|exceeded)|insufficient_quota|you('ve| have) hit your ((weekly|monthly)[[:space:]]+)?((usage|rate)[[:space:]]+)?limit"
+}

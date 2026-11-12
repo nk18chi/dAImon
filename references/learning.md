@@ -44,7 +44,7 @@ After writing the file, add a one-line pointer to `MEMORY.md`.
 ## What does NOT belong in memory
 
 - Per-item processing state (which PR/story/comment you already handled this run)
-  — that goes in your durable state file at `$DAIMON_STATE_FILE`, not memory.
+  — that goes in your durable state (`daimon state get`/`set`), not memory.
 - Anything already in the repo's `CLAUDE.md` or rules files.
 - A duplicate of an existing memory — update that file instead, and delete a
   memory that turns out to be wrong.

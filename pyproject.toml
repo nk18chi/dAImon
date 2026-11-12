@@ -17,7 +17,7 @@ dependencies = []
 # Dev-only: linters, type checker, hooks, and the TUI framework (so pyright can
 # resolve tui/ imports). None of these are needed to run a daemon.
 dev = [
-    "ruff>=0.9",
+    "ruff>=0.15.21",
     "pyright>=1.1.390",
     "pre-commit>=4.0",
     "textual>=0.85",

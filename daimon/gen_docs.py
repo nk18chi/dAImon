@@ -6,6 +6,7 @@ they are up to date (used by tests/CI) and exits non-zero on drift."""
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -114,9 +115,33 @@ def render_index(daemons: list[tuple[str, dict, dict]]) -> str:
     return "\n\n".join(body) + "\n"
 
 
+def _ignored(root: Path, dirs: list[Path]) -> set[Path]:
+    """Daemon dirs git is told to ignore. A daemon kept out of the repo (a personal
+    one, excluded via .git/info/exclude) must stay out of the committed index too —
+    otherwise generating docs writes its name into a tracked file, which then reads
+    as drift forever. Any failure means "ignore nothing", so a missing git or a
+    non-repo checkout documents everything as before."""
+    if not dirs:
+        return set()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "--stdin"],
+            input="\n".join(str(d) for d in dirs),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    if proc.returncode not in (0, 1):
+        return set()
+    return {Path(line).resolve() for line in proc.stdout.splitlines() if line.strip()}
+
+
 def _targets(root: Path) -> list[tuple[Path, str]]:
     dirs = sorted(p.parent for p in (root / "daemons").glob("*/daemon.toml"))
     out = [(d / "README.md", render_daemon(d)) for d in dirs]
+    ignored = _ignored(root, dirs)
     index = [
         (
             d.name,
@@ -124,6 +149,7 @@ def _targets(root: Path) -> list[tuple[Path, str]]:
             _frontmatter((d / "skill" / "SKILL.md").read_text()),
         )
         for d in dirs
+        if d.resolve() not in ignored
     ]
     out.append((root / "daemons" / "README.md", render_index(index)))
     return out

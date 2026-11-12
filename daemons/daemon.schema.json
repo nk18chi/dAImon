@@ -19,6 +19,14 @@
             "codex"
           ]
         },
+        "fallback_backend": {
+          "type": "string",
+          "enum": [
+            "",
+            "claude",
+            "codex"
+          ]
+        },
         "model": {
           "oneOf": [
             {
@@ -40,6 +48,10 @@
           "minimum": 1
         },
         "ready_timeout": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hourly_cap": {
           "type": "integer",
           "minimum": 1
         },
@@ -166,6 +178,12 @@
             "enum": [
               "codex"
             ]
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
         "required_inputs": {

@@ -15,6 +15,17 @@ session_name() {  # slug [backend]
   local slug="$1" be="${2:-}"
   if [ -n "$be" ]; then echo "${DAIMON_NS}-${slug}-${be}"; else echo "${DAIMON_NS}-${slug}"; fi
 }
+# The newest message key `daimon inbox take` recorded for a daemon (empty if
+# none). It moves only when a run takes a message, so launch.sh can tell a run
+# that made progress from one that never read its inbox.
+inbox_last_taken() {  # slug
+  python3 - "$DAIMON_STATE_DIR/state/$1.json" <<'PY'
+import json, sys
+try: keys = json.load(open(sys.argv[1])).get("handled_keys", [])
+except Exception: keys = []
+print(keys[-1] if keys else "")
+PY
+}
 sentinel_file()  { echo "/tmp/${DAIMON_NS}-done-$1"; }
 heartbeat_file() { echo "/tmp/${DAIMON_NS}-hb-$1"; }
 wait_file()      { echo "/tmp/${DAIMON_NS}-wait-$1"; }
@@ -60,7 +71,14 @@ records_dir()     { echo "$DAIMON_STATE_DIR/state"; }
 state_file()      { echo "$DAIMON_STATE_DIR/state/$1.json"; }
 mcp_dir()         { echo "$DAIMON_STATE_DIR/mcp"; }
 mcp_config_file() { echo "$(mcp_dir)/$1.json"; }
+restricted_dir()  { echo "$(runtime_dir)/restricted/$1"; }
 prompts_dir()     { echo "$DAIMON_STATE_DIR/prompts"; }
+
+daemon_session_names() {  # slug -> bare legacy/single name, then backend-qualified names
+  local slug="$1" be
+  session_name "$slug"
+  for be in $(cfg backends-all); do session_name "$slug" "$be"; done
+}
 
 ensure_state_dirs() {
   mkdir -p "$(logs_dir)" "$(transcripts_dir)" "$(queues_dir)" "$(runtime_dir)" "$(records_dir)" "$(mcp_dir)" "$(prompts_dir)"

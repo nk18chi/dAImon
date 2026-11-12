@@ -1,0 +1,26 @@
+[daemon]
+backend = "claude"
+# Inbox-driven: the env-bridge Slack app queues a message and nudges
+# `daimon run slack-commands`; the inbox gate launches immediately. The
+# schedule is only a fallback sweep for messages queued while a run was
+# already in flight.
+schedule = { interval = 900 }
+command = "/slack-commands"
+# Command handling is short by construction: long work (the urgent-fix
+# path) is launched as a detached process the engine does not wait on, so
+# this only needs to cover replying to a burst of queries.
+stuck_after = 1800
+# Own launch budget: command handling must not be starved by other daemons
+# burning the global pool (inbox-nudged launches bypass budgets anyway;
+# this covers the scheduled fallback sweep).
+hourly_cap = 30
+
+[inputs]
+# Command plugins: one markdown runbook per command. Shared plugins are
+# committed; local_commands_dir (gitignored) holds personal/company runbooks
+# and overrides shared ones on name conflict. Paths relative to install root.
+commands_dir = "daemons/slack-commands/commands"
+local_commands_dir = "daemons/slack-commands/commands.local"
+# Slack user IDs allowed to run plugins marked `mutating: true`. Empty =
+# nobody can run mutating commands.
+mutate_allowlist = []

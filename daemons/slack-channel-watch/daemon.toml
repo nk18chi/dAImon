@@ -1,0 +1,29 @@
+[daemon]
+backend = "claude"
+# Poller sessions are short but need a model that reliably makes direct MCP
+# tool calls — haiku doom-loops trying to reach MCP tools through bash.
+# hourly_cap gives polling its own launch budget so it neither starves nor
+# is starved by the fleet's global pool. With token_command set, discover.sh
+# polls in script (free, unbudgeted, no model at all) and the interval can
+# drop to 30s.
+model = "sonnet"
+schedule = { interval = 120 }
+hourly_cap = 40
+command = "/slack-channel-watch"
+stuck_after = 600
+required_inputs = ["watch_channels"]
+
+[inputs]
+# Channel IDs to watch. Only top-level messages starting with trigger_prefix
+# are commands, so mixed-purpose channels (squad chat, feeds) are safe to
+# watch — everything else is ignored.
+watch_channels = ["CHANGE_ME"]
+trigger_prefix = "?"
+# Daemon whose inbox receives the commands (the plugin engine).
+target = "slack-commands"
+# Command that prints a Slack token with channels:history/groups:history read
+# scope (e.g. `security find-generic-password -s slack-watch -w`, a doppler
+# get, or an env echo). When set, discover.sh polls and forwards entirely in
+# script and NO watcher agent ever launches — the model only runs to execute
+# actual commands. Empty = agent-based MCP polling fallback (costlier).
+token_command = ""

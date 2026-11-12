@@ -16,6 +16,16 @@ A backend must define these functions:
 | `backend_cli_args` | `model danger session_name` | The argument string placed after the binary. `danger` is `1`/`0`; map it to the CLI's run-dangerous flag (empty when `0`). |
 | `backend_ready_regex` | `danger` | A regex `lib/launch.sh` greps the pane for to know the UI is ready. Echo empty to skip banner detection and use a fixed boot delay instead. |
 | `backend_completion_mode` | — | `hook` (a Stop-hook touches the sentinel; precise), `idle` (no hook; completion inferred from heartbeat staleness), or `oneshot` (see below). |
+| `backend_exhausted_regex` | — | Case-insensitive transcript regex that matches only provider-capacity exhaustion. This is the sole condition that permits `fallback_backend`; keep it narrower than ordinary errors or advisory limit text. |
+
+## Capacity fallback
+
+Set `fallback_backend = "codex"` under global `[defaults]` or a daemon's
+`[daemon]` table to opt in. The primary run is captured first. The fallback runs
+the same rendered skill only when `backend_exhausted_regex` matches; successful
+completion and ordinary boot, authentication, permission, or task failures never
+start it. A successful fallback also suppresses the legacy fleet-wide quota halt,
+so later fires can follow the same primary-then-fallback path.
 
 ## One-shot backends
 
@@ -35,6 +45,18 @@ When a daemon opts into MCP servers (`[daemon].mcp`), the launcher writes a
 calling `backend_cli_args`. A backend that supports MCP should read that env var
 and pass the file to its CLI's MCP flag (empty/unset means no MCP). The `claude`
 backend maps it to `--mcp-config <file> --strict-mcp-config`.
+
+## Tool allowlist
+
+When a daemon sets `[daemon].tools`, `DAIMON_D_TOOLS` holds the rules as
+pre-quoted shell words. A backend that can enforce an allowlist should prefer it
+over the danger flag; the `claude` backend maps it to
+`--permission-mode dontAsk --setting-sources '' --allowedTools <rules>` and
+reports the `don't ask on` banner as ready. Loading no settings files keeps the
+user's own allow rules out too; `lib/launch.sh` builds `DAIMON_RESTRICTED_DIR`
+(via `lib/restricted_claude.py`) with dAImon's hooks for `--settings` and the
+allowlisted MCP servers for `--mcp-config --strict-mcp-config`. Backends without an equivalent must
+not be used with `tools` (config validation enforces this for `codex`).
 
 ## How the launcher uses them
 

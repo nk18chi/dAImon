@@ -10,6 +10,7 @@ source "$DAIMON_LIB_DIR/common.sh"
 source "$DAIMON_LIB_DIR/logging.sh"
 source "$DAIMON_LIB_DIR/reap.sh"
 source "$DAIMON_LIB_DIR/budget.sh"
+source "$DAIMON_LIB_DIR/backend-status.sh"
 
 ensure_state_dirs
 OPLOG="$(logs_dir)/$SLUG.log"
@@ -22,6 +23,8 @@ READY_TIMEOUT="$DAIMON_READY_TIMEOUT"
 MCP="$DAIMON_D_MCP"
 read -r -a BACKENDS <<< "$DAIMON_D_BACKENDS"
 MULTI=0; [ "${#BACKENDS[@]}" -gt 1 ] && MULTI=1
+EXHAUSTED_BACKEND=""
+EXHAUSTED_TRANSCRIPT=""
 
 pane_heartbeat() {  # session heartbeat — touch heartbeat whenever the pane changes
   local sess="$1" hb="$2" prev="" cur
@@ -72,6 +75,17 @@ run_one_backend() {
   fi
   export DAIMON_MCP_CONFIG="$mcp_file"
 
+  # A tools allowlist runs with no settings files at all; build the hooks,
+  # allowlisted-MCP, and skill-plugin files it starts from instead (see
+  # restricted_claude.py).
+  local restricted="" warn
+  if [ -n "${DAIMON_D_TOOLS:-}" ]; then
+    restricted="$(restricted_dir "$SLUG")"
+    warn="$(DAIMON_D_TOOLS="$DAIMON_D_TOOLS" python3 "$DAIMON_LIB_DIR/restricted_claude.py" "$restricted" "$SLUG" 2>&1)"
+    [ -n "$warn" ] && log_event "$SLUG" restricted "$warn" >> "$OPLOG"
+  fi
+  export DAIMON_RESTRICTED_DIR="$restricted"
+
   local bin args stdin=""
   bin="$(backend_bin)"
   args="$(backend_cli_args "$model" "$DANGER" "$session")"
@@ -81,15 +95,22 @@ run_one_backend() {
     stdin="< '$PROMPTF'"
   fi
   local tfile; tfile="$(transcripts_dir)/${SLUG}-${be}-$(date -u +%Y%m%dT%H%M%SZ).log"
-  tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
-    "DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin"
+  # The has-session check above races a launcher started at the same moment
+  # (two mentions at once). tmux refuses a duplicate name atomically: if the
+  # other launcher won, leave its session alone — don't reap it on return.
+  if ! tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
+    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin" 2>/dev/null; then
+    trap - RETURN
+    log_event "$SLUG" skip "session $session already running" >> "$OPLOG"
+    return 0
+  fi
   tmux set-option -t "$session" prefix2 C-a 2>/dev/null || true
   # A oneshot process can exit before the completion loop's final capture, so
   # stream the pane to the transcript live instead of grabbing it at the end.
   if [ "$mode" = "oneshot" ]; then
     tmux pipe-pane -t "$session" "cat >> '$tfile'" 2>/dev/null || true
   fi
-  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER stuck_after=$STUCK_AFTER" >> "$OPLOG"
+  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER tools=${DAIMON_D_TOOLS:+on} stuck_after=$STUCK_AFTER" >> "$OPLOG"
 
   local regex booted=0 i
   regex="$(backend_ready_regex "$DANGER")"
@@ -161,11 +182,68 @@ run_one_backend() {
   if [ "$mode" != "oneshot" ]; then
     tmux capture-pane -p -S - -t "$session" 2>/dev/null | strip_chrome > "$tfile"
   fi
-  DAIMON_TRANSCRIPT="$tfile" bash "$DAIMON_LIB_DIR/throttle-detect.sh" "$be" 2>/dev/null || true
+  if backend_is_exhausted "$be" "$tfile"; then
+    EXHAUSTED_BACKEND="$be"
+    EXHAUSTED_TRANSCRIPT="$tfile"
+    log_event "$SLUG" exhausted "backend=$be capacity limit detected" >> "$OPLOG"
+    rotate_if_large "$OPLOG"
+    return 75
+  fi
   rotate_if_large "$OPLOG"
   return 0
 }
 
-for be in "${BACKENDS[@]}"; do
-  run_one_backend "$be" || { log_event "$SLUG" chain_stop "backend $be failed" >> "$OPLOG"; break; }
+TAKEN_BEFORE="$(inbox_last_taken "$SLUG")"
+fallback_succeeded=0
+for (( backend_i=0; backend_i<${#BACKENDS[@]}; backend_i++ )); do
+  be="${BACKENDS[$backend_i]}"
+  # Clear cleanup_be's RETURN trap here, in the caller: it outlives the function
+  # and would fire again when the script later `source`s a file, where its
+  # locals are gone — under set -u that kills the script. (Clearing it inside
+  # the handler doesn't stick; bash restores it.)
+  run_one_backend "$be"; rc=$?; trap - RETURN
+  if [ "$rc" -eq 0 ]; then
+    if [ -n "$EXHAUSTED_BACKEND" ]; then
+      fallback_succeeded=1
+      log_event "$SLUG" fallback_done "backend=$be completed after $EXHAUSTED_BACKEND exhaustion" >> "$OPLOG"
+    fi
+    break
+  fi
+  if [ "$rc" -eq 75 ] && [ $(( backend_i + 1 )) -lt "${#BACKENDS[@]}" ]; then
+    log_event "$SLUG" fallback "backend=$be exhausted; trying ${BACKENDS[$(( backend_i + 1 ))]}" >> "$OPLOG"
+    continue
+  fi
+  log_event "$SLUG" chain_stop "backend $be failed" >> "$OPLOG"
+  break
 done
+
+# Preserve quota auto-throttling when no usable fallback completed. A successful
+# fallback deliberately leaves the fleet running so future fires can use it too.
+if [ -n "$EXHAUSTED_TRANSCRIPT" ] && [ "$fallback_succeeded" -ne 1 ]; then
+  DAIMON_TRANSCRIPT="$EXHAUSTED_TRANSCRIPT" \
+    bash "$DAIMON_LIB_DIR/throttle-detect.sh" "$EXHAUSTED_BACKEND" 2>/dev/null || true
+fi
+
+# Remove state an agent leaked into the repo. The first path is literal: an
+# unexpanded write to '$DAIMON_STATE_FILE' creates a file by that exact name.
+if [ -n "$WORKING_DIR" ] && [ -d "$WORKING_DIR" ]; then
+  # shellcheck disable=SC2016  # the single-quoted $DAIMON_STATE_FILE is a literal filename
+  for stray in "$WORKING_DIR/"'$DAIMON_STATE_FILE' "$WORKING_DIR/.daimon"; do
+    # An if, not `[ -e ] && ...`: a missing artifact must not become the
+    # script's exit status, or `daimon run` reports every clean run as failed.
+    if [ -e "$stray" ]; then
+      rm -rf "$stray" && log_event "$SLUG" cleanup "removed leaked repo artifact ${stray##*/}" >> "$OPLOG"
+    fi
+  done
+fi
+
+# Drain the queue one run at a time. A daemon that takes one message per run
+# (`daimon inbox take <slug> --one`) leaves the rest queued; go again, through
+# run.sh's gates, while messages wait. Only after a run that took something —
+# otherwise a run that never reads its inbox would relaunch forever.
+DAEMON_NAME="$SLUG" source "$DAIMON_LIB_DIR/inbox.sh"
+if [ "${HAS_INBOX_MESSAGES:-0}" -gt 0 ] && [ "$(inbox_last_taken "$SLUG")" != "$TAKEN_BEFORE" ]; then
+  log_event "$SLUG" drain "$HAS_INBOX_MESSAGES message(s) still queued; next run" >> "$OPLOG"
+  exec bash "$DAIMON_LIB_DIR/run.sh" "$SLUG"
+fi
+exit 0

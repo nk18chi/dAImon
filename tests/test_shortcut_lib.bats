@@ -8,6 +8,25 @@ setup() {
   source "$ROOT/profiles/shortcut/lib.sh"
 }
 
+@test "shortcut_exclusions: unset -> empty" {
+  unset DAIMON_INPUT_EXCLUDE_EPICS
+  run shortcut_exclusions
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+
+@test "shortcut_exclusions: one epic -> one negated term" {
+  export DAIMON_INPUT_EXCLUDE_EPICS="1234"
+  run shortcut_exclusions
+  [ "$output" = " !epic:1234" ]
+}
+
+@test "shortcut_exclusions: several epics -> one term each" {
+  export DAIMON_INPUT_EXCLUDE_EPICS="1234 5678"
+  run shortcut_exclusions
+  [ "$output" = " !epic:1234 !epic:5678" ]
+}
+
 @test "shortcut_owner_count: no owner -> workspace count" {
   unset DAIMON_INPUT_OWNER
   shortcut_count() { echo 5; }

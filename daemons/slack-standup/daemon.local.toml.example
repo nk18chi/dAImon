@@ -1,0 +1,21 @@
+# Machine-specific overrides for slack-standup. Copy to daemon.local.toml.
+[daemon]
+# Repo the standup is generated from.
+working_dir = "~/src/my-repo"
+danger = true
+
+[inputs]
+channel_id = "C0123456789"
+channel_name = "my-standup-channel"
+# Start in test mode: posts go to your own DM until you flip this off.
+test_mode = true
+tracker_hints = """
+Query Shortcut with `shortcut-cli search "owner:me" 'state:"In Progress"'` and
+the ready state named "Ready for Development". Tickets are tagged [sc-NNNNN]
+in PR titles; story URLs look like https://app.shortcut.com/org/story/NNNNN.
+"""
+focus_hints = """
+Split design-system PRs into their own :art: section. Also check the
+Cloudflare audit log for changes I made, and surface noteworthy
+non-PR digs from my own assistant sessions (skip autonomous daemon runs).
+"""

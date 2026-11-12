@@ -22,11 +22,14 @@
 1. launchd fires `lib/run.sh <slug>` on the daemon's schedule.
 2. Gates: throttle → inbox → `discover.sh` (exit 0 to proceed).
 3. `launch.sh` opens a detached tmux session in the daemon's `working_dir`,
-   running the backend CLI with the configured model and danger flag.
+   running the primary backend CLI with the configured model and danger flag.
 4. It waits for the ready banner, types the daemon's `command`, then blocks.
 5. Completion: a sentinel file (Claude's Stop hook), or heartbeat-idle for a
    backend with no such hook. No wall-clock cap — only `stuck_after` seconds of silence.
-6. The pane scrollback is saved as a transcript; the session is reaped, taking
+6. The pane scrollback is saved as a transcript. If the backend-specific capacity
+   classifier recognizes a provider usage/spend limit, the configured fallback
+   backend runs the same skill. Other failures stop the chain.
+7. The session is reaped, taking
    its whole descendant tree (so MCP servers don't leak).
 
 ## Completion & liveness

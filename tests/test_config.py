@@ -194,6 +194,22 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(self.cfg.backends("alpha"), ["claude"])
         self.assertEqual(self.cfg.backends("beta"), ["claude"])
 
+    def test_backends_appends_optional_fallback(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            backend = "claude"
+            fallback_backend = "codex"
+            model = { claude = "opus", codex = "gpt-5.3-codex" }
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            """,
+        )
+        cfg = config.Config.load()
+        self.assertEqual(cfg.backends("alpha"), ["claude", "codex"])
+        self.assertEqual(cfg.model_for("alpha", "codex"), "gpt-5.3-codex")
+
     def test_backends_all_lists_every_known_backend(self):
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -241,6 +257,24 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(env["DAIMON_READY_TIMEOUT"], "20")
         self.assertEqual(env["DAIMON_D_MODEL_CLAUDE"], self.cfg.model_for("alpha", "claude"))
 
+    def test_daemon_env_bundles_fallback_model(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            fallback_backend = "codex"
+            model = { claude = "opus", codex = "gpt-5.3-codex" }
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            """,
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        env = self._parse_env_output(buf.getvalue())
+        self.assertEqual(env["DAIMON_D_BACKENDS"], "claude codex")
+        self.assertEqual(env["DAIMON_D_MODEL_CODEX"], "gpt-5.3-codex")
+
     def test_mcp_absent_by_default(self):
         self.assertEqual(self.cfg.daemon("alpha")["mcp"], [])
         self.assertEqual(self.cfg.mcp_config("alpha"), {})
@@ -284,6 +318,62 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         self.assertEqual(config.Config.load().daemon("alpha")["mcp"], ["codex"])
+
+    def test_tools_absent_by_default(self):
+        self.assertEqual(self.cfg.daemon("alpha")["tools"], [])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        self.assertEqual(self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"], "")
+
+    def test_tools_exported_as_shell_words(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Read", "Bash(git log:*)"]
+        """,
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
+        self.assertEqual(shlex.split(words), ["Read", "Bash(git log:*)"])
+
+    def test_state_dir_expanded_in_tools_and_skill(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Edit(/{{state_dir}}/qa/**)"]
+        """,
+        )
+        write(self.root / "daemons" / "alpha" / "skill" / "SKILL.md", "Log to {{state_dir}}/qa.\n")
+        cfg = config.Config.load()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
+        self.assertEqual(shlex.split(words), [f"Edit(/{cfg.state_dir}/qa/**)"])
+        self.assertEqual(config.render_skill(cfg, "alpha"), f"Log to {cfg.state_dir}/qa.\n")
+
+    def test_validate_rejects_tools_with_codex(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            fallback_backend = "codex"
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            tools = ["Read"]
+        """,
+        )
+        errs = config.validate(config.Config.load())
+        self.assertTrue(any("tools allowlist is claude-only" in e for e in errs))
 
     def test_discover_memoized_and_invalidated_on_write(self):
         first = self.cfg.discover()
@@ -425,6 +515,33 @@ class ConfigTest(unittest.TestCase):
         )
         errs = config.validate(config.Config.load())
         self.assertTrue(any("backend must be one of" in e for e in errs))
+
+    def test_validate_catches_bad_fallback_backend(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            fallback_backend = "gpt"
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            """,
+        )
+        errs = config.validate(config.Config.load())
+        self.assertTrue(any("fallback_backend must be one of" in e for e in errs))
+
+    def test_validate_catches_fallback_matching_primary(self):
+        write(
+            self.root / "daemons" / "alpha" / "daemon.toml",
+            """
+            [daemon]
+            backend = "claude"
+            fallback_backend = "claude"
+            schedule = { interval = 1200 }
+            command = "/alpha"
+            """,
+        )
+        errs = config.validate(config.Config.load())
+        self.assertTrue(any("fallback_backend must differ" in e for e in errs))
 
     def test_validate_catches_empty_required_input(self):
         write(

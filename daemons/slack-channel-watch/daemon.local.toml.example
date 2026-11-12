@@ -1,0 +1,12 @@
+# Machine-specific overrides for slack-channel-watch. Copy to daemon.local.toml.
+[daemon]
+danger = true
+# Poll cadence (seconds) = worst-case command latency. 120 on the agent
+# fallback (pair with [budget].exempt in daimon.toml); 30 once token_command
+# gives the free scripted gate.
+schedule = { interval = 120 }
+
+[inputs]
+# Watch as many channels as you like; only ?-prefixed messages are commands.
+watch_channels = ["C0123456789", "C0987654321"]
+trigger_prefix = "?"

@@ -39,11 +39,8 @@ service, and the environment.
 
 ## 3. Dedupe against what you've already filed
 
-`$DAIMON_STATE_FILE` is your durable JSON memory: an array of
-`{signature, story_id, title, last_seen}`. Read it first. (Prefer your
-platform's file tools with the literal state path over shell commands that
-expand `$DAIMON_STATE_FILE` — env expansions require interactive approval in
-non-danger sessions.)
+Your durable JSON memory (read it first with `daimon state get`) is an array of
+`{signature, story_id, title, last_seen}`.
 
 - A cluster whose signature you've already filed is **known** — do not file a
   second story. (Optionally note it recurred by updating `last_seen`; never open
@@ -107,6 +104,6 @@ occurrence count first); leave the rest for the next run. For each:
 
 ## 5. Finish
 
-Append each filed cluster as `{signature, story_id, title, last_seen}` to
-`$DAIMON_STATE_FILE`. Summarize briefly: each cluster, its occurrence count, and
-the story you opened (or "known — skipped").
+Append each filed cluster as `{signature, story_id, title, last_seen}` and write
+the record back with `daimon state set`. Summarize briefly: each cluster, its
+occurrence count, and the story you opened (or "known — skipped").

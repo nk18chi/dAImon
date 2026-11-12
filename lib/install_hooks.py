@@ -2,8 +2,9 @@
 """Idempotently merge dAImon's agent hooks into a settings file.
 
 usage: install_hooks.py <settings.json> <hooks.json>
-Backs up the settings file, then appends our hook entries to each event only if
-an entry referencing $DAIMON_ is not already present.
+Backs up the settings file, then appends each hook entry unless every command
+in it is already present under that event (exact-command dedupe, so distinct
+hook sets — agent heartbeats, the standup worklog — can merge independently).
 """
 
 import json
@@ -11,11 +12,23 @@ import shutil
 import sys
 from pathlib import Path
 
-MARKER = "$DAIMON_"
+
+def _commands(entries) -> set:
+    return {h.get("command") for entry in entries for h in entry.get("hooks", [])}
 
 
-def _has_marker(entries) -> bool:
-    return any(MARKER in h.get("command", "") for entry in entries for h in entry.get("hooks", []))
+def _merge_new_entries(existing: list, entries: list) -> int:
+    """Append each entry whose commands aren't all present already; return count added."""
+    have = _commands(existing)
+    added = 0
+    for entry in entries:
+        cmds = _commands([entry])
+        if cmds <= have:
+            continue
+        existing.append(entry)
+        have |= cmds
+        added += 1
+    return added
 
 
 def main(argv):
@@ -30,11 +43,7 @@ def main(argv):
     settings.setdefault("hooks", {})
     added = 0
     for event, entries in hooks.items():
-        existing = settings["hooks"].setdefault(event, [])
-        if _has_marker(existing):
-            continue
-        existing.extend(entries)
-        added += 1
+        added += _merge_new_entries(settings["hooks"].setdefault(event, []), entries)
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")

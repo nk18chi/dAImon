@@ -10,6 +10,7 @@ throttle_level() {  # echoes the active level, honoring expiry
   file="$(_throttle_file)"
   level="$(json_state get "$file" level off)"
   exp="$(json_state get "$file" expires_at 0)"; exp="${exp%.*}"
+  case "$exp" in ''|*[!0-9]*) exp=0 ;; esac  # any non-numeric reads as "no expiry"
   if [ "${exp:-0}" -gt 0 ] && [ "$(now_epoch)" -gt "$exp" ]; then echo off; else echo "$level"; fi
 }
 
@@ -32,7 +33,17 @@ SKIP_REASON=""
   elif [ "$level" = "off" ]; then
     :
   elif [ "$level" = "halt" ]; then
-    SHOULD_SKIP=1; SKIP_REASON="throttle=halt: skipping $DAEMON_NAME"
+    # A provider-cap halt predating fallback configuration must not prevent the
+    # fallback path from ever launching. Only bypass the matching detector-made
+    # halt; manual and unrelated halt reasons retain their normal behavior.
+    primary="$(cfg daemon "$DAEMON_NAME" backend 2>/dev/null || true)"
+    fallback="$(cfg daemon "$DAEMON_NAME" fallback_backend 2>/dev/null || true)"
+    reason="$(json_state get "$(_throttle_file)" reason "")"
+    if [ -n "$fallback" ] && [ "$reason" = "$primary usage limit detected in transcript" ]; then
+      :
+    else
+      SHOULD_SKIP=1; SKIP_REASON="throttle=halt: skipping $DAEMON_NAME"
+    fi
   else
     mod="$(cfg get throttle.moderate_mod)"
     if [ "$level" = "severe" ] && ! _in_list "$DAEMON_NAME" throttle.severe_critical; then

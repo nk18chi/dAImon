@@ -5,7 +5,7 @@
 Review open pull requests assigned to you and cast a risk-gated decision — approve, request changes, or comment.
 
 - **Command:** `/review-prs`
-- **Schedule:** 1200s
+- **Schedule:** 10s
 - **Source:** shortcut
 - **Required inputs:** `filter`
 - **Backend:** `claude`

@@ -1,0 +1,8 @@
+/node_modules
+.DS_Store
+.env*
+!.env.sample
+.scrap/
+/manifest.json
+# Slack CLI's record of which app this checkout runs — per engineer.
+.slack/apps.json

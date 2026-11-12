@@ -5,7 +5,13 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOAD=0; [ "${1:-}" = "--load" ] && LOAD=1
+LOAD=0; WORKLOG=0
+for arg in "$@"; do
+  case "$arg" in
+    --load) LOAD=1 ;;
+    --worklog) WORKLOG=1 ;;
+  esac
+done
 
 CONFIG_DIR="$HOME/.config/daimon"
 CONFIG="$CONFIG_DIR/daimon.toml"
@@ -26,6 +32,15 @@ fi
 
 python3 "$ROOT/lib/install_hooks.py" "$HOME/.claude/settings.json" "$ROOT/config/hooks/claude-hooks.json"
 
+if [ "$WORKLOG" -eq 1 ]; then
+  # Opt-in SessionEnd hook: logs the operator's own sessions to
+  # ~/.claude/standup/worklog.jsonl for standup generation (daemon runs excluded).
+  mkdir -p "$HOME/.claude/hooks"
+  ln -sfn "$ROOT/hooks/standup-worklog.sh" "$HOME/.claude/hooks/standup-worklog.sh"
+  python3 "$ROOT/lib/install_hooks.py" "$HOME/.claude/settings.json" "$ROOT/config/hooks/standup-worklog.json"
+  echo "standup worklog hook installed (SessionEnd → ~/.claude/standup/worklog.jsonl)"
+fi
+
 mkdir -p "$HOME/.claude/skills"
 for s in "$ROOT"/skills/*/; do
   name="$(basename "$s")"
@@ -38,7 +53,7 @@ ln -sf "$ROOT/bin/daimon" "$HOME/.local/bin/daimon"
 ln -sf "$ROOT/bin/daimonctl" "$HOME/.local/bin/daimonctl"
 echo "linked daimon + daimonctl into ~/.local/bin (ensure it is on your PATH)"
 
-PYTHONPATH="$ROOT" python3 -m daimon.sync
+PYTHONPATH="$ROOT" python3 -m daimon.sync --all
 
 if [ "$LOAD" -eq 1 ]; then
   load_fail=0

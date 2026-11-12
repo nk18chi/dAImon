@@ -29,7 +29,10 @@ def _coerce(text: str):
 
 def cmd_get(path: str, key: str, default: str = "") -> int:
     data = _load(path)
-    print(_emit(data[key]) if key in data else default)
+    # A JSON null is "no value", not the string "None" — callers pass a default
+    # precisely so they can do arithmetic on the result.
+    value = data.get(key)
+    print(default if value is None else _emit(value))
     return 0
 
 

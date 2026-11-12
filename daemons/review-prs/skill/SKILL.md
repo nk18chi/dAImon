@@ -18,14 +18,44 @@ gh pr list --search "{{inputs.filter}}" --json number,title,headRefName,headRefO
 ```
 
 Skip any PR you have already reviewed at its current head commit. Your durable
-record is the JSON array at `$DAIMON_STATE_FILE` (`[{number, headSha, verdict}]`)
+record is the JSON array from `daimon state get` (`[{number, headSha, verdict}]`)
 — read it at the start, skip PRs whose number + head SHA you've already recorded,
 and write back the ones you act on this run. (Submitting a review also clears the
 `review-requested` flag, so most already-done PRs simply won't appear. A removed
 entry — e.g. reply-to-pr-comments cleared it after a reply — makes a PR reappear for
 re-review even at an unchanged SHA.)
 
-## 2. Review each PR
+## 2. Announce pickup immediately
+
+For each PR you select, post a visible PR conversation comment **before** reading
+the diff, work item, or repository context. Do not use a pending review for this:
+pending reviews are not visible to the author. The comment body is:
+
+```markdown
+{{inputs.bot_marker}} Reviewing this PR now. I'll update this comment when the review is complete.
+<!-- daimon:review-prs:<headSha> -->
+```
+
+Use the issue-comments API (`repos/{owner}/{repo}/issues/<n>/comments`) and retain
+the returned comment `id`. On a retry or a same-SHA re-review, first look for a
+self-authored comment carrying the exact hidden `daimon:review-prs:<headSha>`
+marker and edit that comment back to the pickup body instead of creating a
+duplicate. The hidden marker must remain in every edit.
+
+After submitting the review in §5, edit the pickup comment via
+`repos/{owner}/{repo}/issues/comments/<id>` to:
+
+```markdown
+{{inputs.bot_marker}} Review complete — <VERDICT> · <blocking> blocking, <suggestion> suggestions. See the submitted review below.
+<!-- daimon:review-prs:<headSha> -->
+```
+
+If you cannot complete or submit the review, edit the pickup comment to say that
+the review could not be completed, include a brief reason, and that it will be
+retried. Do not leave a stale “Reviewing” notice, and do not record the PR as
+reviewed in state.
+
+## 3. Review each PR
 
 1. Read the diff (`gh pr diff <number>`).
 2. **Check intent.** If the PR references a work item in one of your configured
@@ -39,9 +69,9 @@ re-review even at an unchanged SHA.)
 4. Identify correctness bugs, security issues, and clear quality problems. Prefer
    a few high-confidence findings over many speculative ones. Tag each finding as
    **Blocking** or **Suggestion** (see the severity tiers in **Output
-   conventions** below) — this drives the verdict in §4.
+   conventions** below) — this drives the verdict in §5.
 
-## 3. Classify risk
+## 4. Classify risk
 
 - **INERT** — every change is copy / strings / comments / markdown / test-only:
   no logic, imports, config, or schema.
@@ -52,7 +82,7 @@ re-review even at an unchanged SHA.)
   automated checks.
 - **LOW / MEDIUM** — everything else.
 
-## 4. Cast one review decision
+## 5. Cast one review decision
 
 Submit **exactly one** review per PR (`gh pr review`, or the reviews API for
 inline comments). Post **one inline comment per finding** — Blocking and
@@ -107,7 +137,7 @@ Write the body per `{{inputs.verbosity}}`:
   Add a `### Resolved without fix` section (one line per thread: `path:line —
   original concern — why unaddressed`) only when re-resolving prior comments.
 
-## 5. Finish
+## 6. Finish
 
-Record each acted-on PR as `{number, headSha, verdict}` in `$DAIMON_STATE_FILE`.
+Record each acted-on PR as `{number, headSha, verdict}` with `daimon state set`.
 Keep the summary short: each PR, its verdict, and its blocking/suggestion counts.

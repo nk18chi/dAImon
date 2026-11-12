@@ -6,11 +6,12 @@ set -uo pipefail
 
 DAIMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DAIMON_LIB_DIR/common.sh"
+source "$DAIMON_LIB_DIR/backend-status.sh"
 
 BACKEND="${1:-unknown}"
 [ -f "${DAIMON_TRANSCRIPT:-}" ] || exit 0
 
-if grep -qiE "usage limit|hit your limit|rate limit|quota" "$DAIMON_TRANSCRIPT"; then
+if backend_is_exhausted "$BACKEND" "$DAIMON_TRANSCRIPT"; then
   ensure_state_dirs
   f="$(runtime_dir)/throttle.json"; now="$(now_epoch)"
   rm -f "$f"

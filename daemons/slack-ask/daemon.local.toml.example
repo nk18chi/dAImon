@@ -1,0 +1,48 @@
+# Machine-specific overrides for slack-ask. Copy to daemon.local.toml.
+[daemon]
+# A clone used ONLY by this daemon — each run does `git pull --ff-only`, so
+# never point it at a checkout you work in.
+working_dir = "~/src/slack-ask/my-repo"
+# The shared read-only list plus your read-only data tools. This replaces the
+# committed list, so keep the base entries. Add READ tools only — the bot must
+# never be able to change data or configuration. Name MCP tools one by one: a
+# bare "mcp__server" rule would also admit its write tools.
+tools = [
+  "Edit(/{{state_dir}}/outbox/slack-ask/**)",
+  "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
+  "Read",
+  "Grep",
+  "Glob",
+  "ToolSearch",
+  "Bash(daimon inbox take slack-ask --one)",
+  "Bash(git pull --ff-only)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+  "Bash(git blame:*)",
+  # Production MongoDB — reads only. Run the server with
+  # MDB_MCP_READ_ONLY=true (drops insert/update/delete tools). `aggregate` is
+  # left out because $out/$merge can still write; add
+  # "mcp__mongodb-mcp-server__aggregate" only if the server connects as a
+  # read-only Atlas user.
+  "mcp__mongodb-mcp-server__find",
+  "mcp__mongodb-mcp-server__count",
+  "mcp__mongodb-mcp-server__list-databases",
+  "mcp__mongodb-mcp-server__list-collections",
+  "mcp__mongodb-mcp-server__collection-schema",
+  "mcp__mongodb-mcp-server__collection-indexes",
+  # HubSpot — reads only (useful for the crm playbook).
+  "mcp__hubspot__search_crm_objects",
+  "mcp__hubspot__get_crm_objects",
+  "mcp__hubspot__get_properties",
+  "mcp__hubspot__search_properties",
+  # Datadog logs via the pup CLI — the two read-only log commands only.
+  "Bash(pup logs search:*)",
+  "Bash(pup logs aggregate:*)",
+]
+
+[inputs]
+# Start with a throwaway test channel (invite the bot). Add the
+# real channels only once answers there look right.
+channel_playbooks = ["C0123456789:crm"]
+# Reporting questions (counts, trends) are sent to your Lightdash project.
+lightdash_url = "https://app.lightdash.cloud/projects/YOUR_PROJECT_ID"

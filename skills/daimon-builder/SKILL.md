@@ -24,6 +24,8 @@ Ask for whatever isn't already clear. Keep it to a few focused questions:
 - **Backend** — `claude` (interactive) or `codex` (one-shot `codex exec`). Offer
   the models with `daimon models <backend>` and let them pick; on `codex`, set the
   model as a table (`model = { codex = "..." }`).
+- **Fallback backend** — optionally set `fallback_backend = "codex"` for a Claude
+  daemon. It runs only when Claude reports provider-cap exhaustion.
 - **MCP** — optionally attach an MCP server (opt-in; e.g. `mcp = ["codex"]` gives a
   Claude daemon a Codex second opinion). Requires danger on.
 - **Danger** — whether to run with permissions/approvals skipped (default: inherit `[defaults]`).

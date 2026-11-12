@@ -26,6 +26,7 @@ Inherited by every daemon; a daemon's `[daemon]` block overrides any field.
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
 | `backend` | enum | `claude` | Agent CLI that drives the session: `claude` (interactive) or `codex` (one-shot `codex exec`). Add more via `backends/<name>.sh`. |
+| `fallback_backend` | enum | disabled | A second backend to try only when the primary backend's transcript reports that its provider capacity is exhausted. Set to `codex` to keep Claude daemons running after Claude hits a usage/spend limit. |
 | `model` | string | `opus` | Passed to the backend as its model flag. |
 | `danger` | bool | `true` | Allow the backend to skip its permission/approval prompts (run-dangerous). |
 | `stuck_after` | int (sec) | `2700` | Idle-gap reaper. A run is killed only after this many seconds with **no agent activity** (heartbeat stale). This is **not** a max runtime — healthy runs may last hours. |
@@ -61,12 +62,14 @@ Inherited by every daemon; a daemon's `[daemon]` block overrides any field.
 | Key | Type | Meaning |
 |-----|------|---------|
 | `backend` | enum | Override the default backend (`claude` or `codex`) for this daemon. On `codex`, set a Codex model via the `model` table (e.g. `{ codex = "gpt-5.3-codex" }`) — a plain `opus`/`sonnet`/`haiku` falls back to Codex's own default. |
+| `fallback_backend` | enum | Override or disable (`""`) the fallback backend. It runs only after the primary reports provider-cap exhaustion; boot, authentication, permission, and task failures do not trigger it. For distinct models, use a table such as `{ claude = "opus", codex = "gpt-5.3-codex" }`. |
 | `model` | string | Override the default model. |
 | `danger` | bool | Override run-dangerous for this daemon. |
 | `stuck_after` | int (sec) | Override the idle-gap reaper. |
 | `command` | string | The slash-command typed into the agent session (e.g. `/review-prs`). |
 | `working_dir` | path | Directory the agent launches in (a trusted folder). May be a single repo, or a **parent directory containing several repos** — the agent `cd`s into the one a work item concerns, picking up that repo's `CLAUDE.md`/conventions/`gh` context on the way in. This is per-machine, so the committed `daemon.toml` omits it and **you set it in `daemon.local.toml`** (or the TUI); if unset it falls back to `install_root` and `daimon doctor` warns. Optionally scope which repos with an `[inputs].repos` allowlist (e.g. `["api"]`); empty = all repos under the directory. There is no separate `repo` setting — `gh` infers it from the repo the agent enters. |
 | `mcp` | string[] | MCP servers for this daemon's session (overrides `[defaults].mcp`). Known: `codex` — also attaches the `references/codex-review.md` second-opinion protocol to the skill. Requires `danger = true`. |
+| `tools` | string[] | Tool allowlist in Claude permission-rule syntax (e.g. `["Read", "Bash(git log:*)", "mcp__server__tool"]`). When set it **overrides `danger`**: the session runs `--permission-mode dontAsk` (anything unlisted is denied, never prompted) and loads **no** settings files, so neither the target repo's nor your own `~/.claude/settings.json` allow rules can widen it (nor do your other hooks or plugins run). dAImon's own hooks are passed with `--settings`, and the user-scope MCP servers the list names (`mcp__<server>__…`) are copied from `~/.claude.json` into a private `--mcp-config` file at launch. Name MCP tools one by one — a bare `mcp__server` rule would admit its write tools too. Claude-only: validation rejects `codex` as backend or fallback. `{{state_dir}}` in a rule expands to the absolute state dir, so `Edit(/{{state_dir}}/qa-log/x/**)` allows writes to that folder only (Edit rules cover Write; the extra leading `/` makes the `//` absolute-path form). Skills can use `{{state_dir}}` too. Use it for daemons triggered by untrusted input (e.g. `slack-ask`). |
 | `source` | string | Name of a [source profile](#source-profiles) (folder under `profiles/`) describing the work-item backend, e.g. `shortcut`. Optional; omit for daemons that only act on the repo (PR daemons). |
 | `schedule` | table | One of: `{ interval = 1200 }` (seconds), `{ minutes = [8, 38] }` (minutes past each hour), or `{ daily = "13:02", tz = "UTC" }`. |
 

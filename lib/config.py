@@ -36,6 +36,7 @@ CORE_DEFAULTS = {
 }
 DEFAULT_DEFAULTS = {
     "backend": "claude",
+    "fallback_backend": "",
     "model": "opus",
     "danger": True,
     "stuck_after": 2700,
@@ -49,9 +50,17 @@ THROTTLE_DEFAULTS = {
     "severe_mod": 4,
     "severe_critical": [],
 }
-BUDGET_DEFAULTS = {"hourly_cap": 12, "defer_at_pct": 80}
+BUDGET_DEFAULTS = {"hourly_cap": 12, "defer_at_pct": 80, "exempt": []}
 
-DAEMON_FIELDS = ("backend", "model", "danger", "stuck_after", "command", "schedule")
+DAEMON_FIELDS = (
+    "backend",
+    "fallback_backend",
+    "model",
+    "danger",
+    "stuck_after",
+    "command",
+    "schedule",
+)
 
 
 def repo_root() -> Path:
@@ -184,6 +193,8 @@ class Config:
         merged["required_inputs"] = list(ri) if isinstance(ri, list) else [ri]
         mcp = merged.get("mcp", [])
         merged["mcp"] = [mcp] if isinstance(mcp, str) else list(mcp)
+        tools = merged.get("tools", [])
+        merged["tools"] = [tools] if isinstance(tools, str) else list(tools)
         return merged
 
     def mcp_config(self, slug: str) -> dict:
@@ -192,7 +203,11 @@ class Config:
         return {"mcpServers": servers} if servers else {}
 
     def backends(self, slug: str) -> list[str]:
-        return [self.daemon(slug)["backend"]]
+        daemon = self.daemon(slug)
+        backends = [daemon["backend"]]
+        if daemon["fallback_backend"]:
+            backends.append(daemon["fallback_backend"])
+        return backends
 
     def model_for(self, slug: str, backend: str) -> str:
         m = self.daemon(slug)["model"]
@@ -268,12 +283,24 @@ def render_watchdog_plist(cfg: Config) -> str:
     )
 
 
-def render_plist_raw(label, program, working_dir, schedule_xml, log) -> str:
+def render_plist_raw(
+    label, program, working_dir, schedule_xml, log, *, keep_alive=False, extra_env=None
+) -> str:
+    """A LaunchAgent plist. Scheduled jobs (the default) don't run at load; a
+    keep_alive service starts at load and is restarted whenever it exits."""
     args = "\n".join(f"        <string>{escape(a)}</string>" for a in program)
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "SSH_AUTH_SOCK") if os.environ.get(k)}
+    env.update(extra_env or {})
     env_xml = "\n".join(
-        f"        <key>{k}</key>\n        <string>{escape(os.environ[k])}</string>"
-        for k in ("PATH", "HOME", "SSH_AUTH_SOCK")
-        if os.environ.get(k)
+        f"        <key>{k}</key>\n        <string>{escape(v)}</string>" for k, v in env.items()
+    )
+    run_xml = (
+        "    <key>RunAtLoad</key>\n    <true/>\n"
+        "    <key>KeepAlive</key>\n    <true/>\n"
+        # A crash loop (bad token, no network) retries every 30s, not every 10s.
+        "    <key>ThrottleInterval</key>\n    <integer>30</integer>"
+        if keep_alive
+        else "    <key>RunAtLoad</key>\n    <false/>"
     )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -296,8 +323,7 @@ def render_plist_raw(label, program, working_dir, schedule_xml, log) -> str:
     <dict>
 {env_xml}
     </dict>
-    <key>RunAtLoad</key>
-    <false/>
+{run_xml}
 </dict>
 </plist>
 """
@@ -327,7 +353,7 @@ def render_skill(cfg: Config, slug: str) -> str:
     for key, val in d["inputs"].items():
         rendered = ", ".join(str(x) for x in val) if isinstance(val, list) else str(val)
         text = text.replace(f"{{{{inputs.{key}}}}}", rendered)
-    return text
+    return text.replace("{{state_dir}}", str(cfg.state_dir))
 
 
 def _is_empty(value) -> bool:
@@ -365,20 +391,44 @@ def _mcp_errors(cfg: Config, slug: str) -> list[str]:
     return errors
 
 
+def _tools_errors(cfg: Config, slug: str) -> list[str]:
+    # Only the claude backend can enforce an allowlist. Letting a codex run
+    # (primary or fallback) proceed would silently drop the restriction, so a
+    # restricted daemon must not be able to reach codex at all.
+    if not cfg.daemon(slug)["tools"]:
+        return []
+    return [
+        f"{slug}: tools allowlist is claude-only — remove codex as backend/fallback_backend"
+        for be in cfg.backends(slug)
+        if be != "claude"
+    ]
+
+
 def validate(cfg: Config) -> list[str]:
     errors: list[str] = []
     if cfg.source is None:
         errors.append(f"no config file at {global_config_path()} (copy config/daimon.toml.example)")
     if cfg.defaults["backend"] not in BACKENDS:
         errors.append(f"[defaults].backend must be one of {BACKENDS}")
+    default_fallback = cfg.defaults["fallback_backend"]
+    if default_fallback and default_fallback not in BACKENDS:
+        errors.append(f"[defaults].fallback_backend must be one of {BACKENDS}")
+    if default_fallback == cfg.defaults["backend"]:
+        errors.append("[defaults].fallback_backend must differ from backend")
     daemons = cfg.discover()
     if not daemons:
         errors.append(f"no daemons discovered under {cfg.daemons_dir()}")
     for slug, raw in daemons.items():
         d = raw.get("daemon", {})
-        be = d.get("backend", cfg.defaults["backend"])
+        merged = cfg.daemon(slug)
+        be = merged["backend"]
+        fallback = merged["fallback_backend"]
         if be not in BACKENDS:
             errors.append(f"{slug}: backend must be one of {BACKENDS}")
+        if fallback and fallback not in BACKENDS:
+            errors.append(f"{slug}: fallback_backend must be one of {BACKENDS}")
+        if fallback == be:
+            errors.append(f"{slug}: fallback_backend must differ from backend")
         cmd = d.get("command")
         if not cmd or not str(cmd).startswith("/"):
             errors.append(f"{slug}: [daemon].command must be set and start with '/'")
@@ -402,6 +452,7 @@ def validate(cfg: Config) -> list[str]:
         else:
             errors.extend(_required_input_errors(cfg, slug))
             errors.extend(_mcp_errors(cfg, slug))
+            errors.extend(_tools_errors(cfg, slug))
     for slug in cfg.disabled:
         if slug not in {p.parent.name for p in cfg.daemons_dir().glob("*/daemon.toml")}:
             errors.append(f"[daemons].disabled references unknown daemon: {slug}")
@@ -465,6 +516,7 @@ def daemon_schema() -> dict:
         "additionalProperties": False,
         "properties": {
             "backend": {"type": "string", "enum": list(BACKENDS)},
+            "fallback_backend": {"type": "string", "enum": ["", *BACKENDS]},
             "model": {
                 "oneOf": [
                     {"type": "string"},
@@ -474,6 +526,7 @@ def daemon_schema() -> dict:
             "danger": {"type": "boolean"},
             "stuck_after": {"type": "integer", "minimum": 1},
             "ready_timeout": {"type": "integer", "minimum": 1},
+            "hourly_cap": {"type": "integer", "minimum": 1},
             "command": {"type": "string", "pattern": "^/"},
             "schedule": schedule,
             "source": {"type": "string"},
@@ -497,6 +550,7 @@ def daemon_schema() -> dict:
             "working_dir": {"type": "string"},
             "learning": {"type": "boolean"},
             "mcp": {"type": "array", "items": {"type": "string", "enum": list(MCP_SERVERS)}},
+            "tools": {"type": "array", "items": {"type": "string"}},
             "required_inputs": {
                 "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
             },
@@ -529,6 +583,15 @@ def bundle_daemon_env(cfg: Config, slug: str) -> str:
         ("DAIMON_D_WORKING_DIR", d["working_dir"]),
         ("DAIMON_D_BACKENDS", be_list),
         ("DAIMON_D_MCP", d["mcp"]),
+        # Pre-quoted shell words: rules like "Bash(git log:*)" contain spaces,
+        # and the backend splices this into the command tmux runs via `sh -c`.
+        # {{state_dir}} lets a rule scope writes to the daemon's own state.
+        (
+            "DAIMON_D_TOOLS",
+            " ".join(
+                shlex.quote(t.replace("{{state_dir}}", str(cfg.state_dir))) for t in d["tools"]
+            ),
+        ),
         ("DAIMON_READY_TIMEOUT", cfg.defaults["ready_timeout"]),
     ]
     pairs += [(f"DAIMON_D_MODEL_{be.upper()}", cfg.model_for(slug, be)) for be in be_list]

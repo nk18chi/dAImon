@@ -1,7 +1,7 @@
 [daemon]
 backend = "claude"
 model = "sonnet"
-schedule = { interval = 1200 }
+schedule = { interval = 10 }
 command = "/review-prs"
 stuck_after = 1800
 required_inputs = ["filter"]

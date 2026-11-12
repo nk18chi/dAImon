@@ -7,14 +7,18 @@
 | [acr-fixer](acr-fixer/) | :5,25,45 mon-fri | Close out ACR review findings on your open PRs — fix each one on the PR branch, reply through the ACR protocol, and push so the next review round verifies the work. |
 | [datadog-log-reviewer](datadog-log-reviewer/) | 1800s | Review recent Datadog error logs, cluster them by root cause, and file one Shortcut story per new cluster for triage. |
 | [dependency-reviewer](dependency-reviewer/) | :13,43 | Triage dependency-bot PRs — auto-merge only low-risk bumps, and leave everything risky with a summary for a human. |
-| [hubspot-log-reviewer](hubspot-log-reviewer/) | 09:00 | Watch production HubSpot integration failures in Datadog, cluster them by root cause, and file one Shortcut story per new cluster under the CRM data-discrepancy epic. |
 | [hubspot-reconciliation-reviewer](hubspot-reconciliation-reviewer/) | 09:00 | Review the daily HubSpot property reconciliation drift report, cluster it by mapper field, and file one Shortcut story per new cluster. |
 | [mongo-slow-query-reviewer](mongo-slow-query-reviewer/) | 09:00,16:00 | Review MongoDB Atlas query shapes, find the ones costing the most execution time, and file one Shortcut story per new offender with a proposed index or rewrite. |
 | [pr-manager](pr-manager/) | :3,23,43 | Shepherd your open pull requests to merge — merge approved ones, resolve conflicts, fix failing CI, and address change requests. |
 | [reply-to-pr-comments](reply-to-pr-comments/) | :17,47 | Respond to replies on your bot comments on GitHub PRs, and re-trigger review when feedback is addressed. |
 | [reply-to-story-comments](reply-to-story-comments/) | :17,47 | Respond to human replies on your bot comments on Shortcut stories, and re-trigger triage when an awaiting-input question is answered. |
-| [review-prs](review-prs/) | 1200s | Review open pull requests assigned to you and cast a risk-gated decision — approve, request changes, or comment. |
+| [review-prs](review-prs/) | 10s | Review open pull requests assigned to you and cast a risk-gated decision — approve, request changes, or comment. |
 | [review-trigger](review-trigger/) | :0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57 | Ask for a review on your open PRs whose current commit nobody has reviewed — trigger your own ACR instance, re-request the others, and record the head so you don't ask twice. |
+| [scheduled-command](scheduled-command/) | 16:00 | Placeholder — this daemon enqueues its command from the gate and never launches an agent. |
+| [slack-ask](slack-ask/) | 60s | Answer @-mention questions from configured Slack channels using the codebase and read-only data, following a per-channel playbook. |
+| [slack-channel-watch](slack-channel-watch/) | 120s | Poll Slack channels for trigger-prefixed command messages and forward them to the command daemon's inbox. |
+| [slack-commands](slack-commands/) | 900s | Handle bridged Slack commands from the daimon inbox via plugin runbooks, with an allowlist gate on mutating commands. |
+| [slack-standup](slack-standup/) | 11:00 | Generate the daily standup and post it to a Slack channel (Mon–Fri, once per day). |
 | [story-reviewer](story-reviewer/) | 1800s | Triage stories — investigate each against the codebase, post an assessment, and stamp a visible label marking whether it's AI-completable. |
 | [work-queue](work-queue/) | :8,38 | Autonomously implement one ready story end-to-end on an isolated branch and open a pull request. |
 

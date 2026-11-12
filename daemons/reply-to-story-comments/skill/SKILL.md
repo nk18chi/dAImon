@@ -30,7 +30,7 @@ awaiting-input stories this run is gated on). For each story, list its comments 
   `{{inputs.bot_marker}}`. Each is a thread root.
 - A comment counts as a **new human reply** when it is authored by someone other
   than you, posted *after* your most recent bot comment on that story, and its id
-  is not already recorded in `$DAIMON_STATE_FILE`.
+  is not already recorded in your state (`daimon state get`).
 
 "You" is the automation. A comment carrying `{{inputs.bot_marker}}` is yours (or a
 sibling daemon's) — never treat it as a human reply, and never reply to it.
@@ -68,5 +68,5 @@ the labels alone and just post your reply; work-queue re-evaluates on its own.
 
 ## 4. Finish
 
-Write the latest processed comment id per story back to `$DAIMON_STATE_FILE`.
+Write the latest processed comment id per story back with `daimon state set`.
 Summarize how many stories you replied to and any you handed back to story-reviewer.

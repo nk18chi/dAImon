@@ -1,0 +1,47 @@
+[daemon]
+backend = "claude"
+# Inbox-driven: env-bridge queues a message when the bot is @-mentioned in one
+# of BRIDGE_ASK_CHANNELS and nudges `daimon run slack-ask`. Each run answers one
+# question; launch.sh starts the next while more are queued. The schedule is
+# only a fallback sweep in case a queued question is ever left behind.
+schedule = { interval = 60 }
+command = "/slack-ask"
+# Answers come from reading code and data, which can sit quiet for a while
+# between tool calls on a hard question.
+stuck_after = 900
+# Anyone in the channel can trigger this daemon, so it runs restricted (see
+# `tools`). The learning protocol writes memory files the allowlist denies.
+learning = false
+required_inputs = ["channel_playbooks"]
+# Read-only allowlist. Setting `tools` replaces --dangerously-skip-permissions
+# with dontAsk: anything not listed here is denied, never prompted. Claude-only,
+# so no codex fallback. A daemon.local.toml `tools` REPLACES this list — copy
+# it and add your read-only MCP tools (see daemon.local.toml.example).
+# No Slack tools: env-bridge hands over the thread and posts the reply as the
+# bot. The only writes are that reply (the outbox) and the local Q&A log. Edit
+# rules cover Write; the leading "/" plus the absolute state_dir makes the "//"
+# absolute-path form.
+tools = [
+  "Edit(/{{state_dir}}/outbox/slack-ask/**)",
+  "Edit(/{{state_dir}}/qa-log/slack-ask/**)",
+  "Read",
+  "Grep",
+  "Glob",
+  "ToolSearch",
+  "Bash(daimon inbox take slack-ask --one)",
+  "Bash(git pull --ff-only)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+  "Bash(git blame:*)",
+]
+
+[inputs]
+# "<channel id>:<playbook>" per answering channel. Playbooks: crm, bug-triage.
+# The same channel IDs go in env-bridge's BRIDGE_ASK_CHANNELS.
+channel_playbooks = ["CHANGE_ME:crm"]
+# Every reply starts with this, so readers see it was the AI answering.
+reply_prefix = ":robot_face: *AI answer*"
+# Where reporting questions (counts, totals, trends over a period) are sent
+# instead of querying the data here: your BI tool's AI, e.g. a Lightdash project
+# URL. Blank = the reply names Lightdash AI without a link.
+lightdash_url = ""

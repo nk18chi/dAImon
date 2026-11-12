@@ -4,10 +4,11 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 
 from _lib import INSTALL_ROOT
-from state import label_for, launchd_loaded, plist_path
+from state import label_for, plist_path
 
 THROTTLE_CYCLE = ["off", "moderate", "severe", "halt"]
 
@@ -27,15 +28,14 @@ def cfg_render_plist(cfg, slug: str) -> str:
 
 
 def run_now(cfg, slug: str) -> None:
-    label = label_for(cfg, slug)
-    if launchd_loaded(label):
-        subprocess.run(["launchctl", "kickstart", "-k", f"{_gui()}/{label}"], check=False)
-    else:
-        subprocess.Popen(
-            ["bash", str(INSTALL_ROOT / "lib" / "run.sh"), slug],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    # The binding promises "run now (bypass gates)": launch.sh directly.
+    # kickstarting the launchd job runs the plist program — the gated run.sh
+    # path — so a manual run would still be skipped by discovery/throttle.
+    subprocess.Popen(
+        ["bash", str(INSTALL_ROOT / "lib" / "launch.sh"), slug],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def enable(cfg, slug: str) -> None:
@@ -68,6 +68,19 @@ def duplicate(cfg, src: str, new: str) -> None:
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "daemon.local.toml"),
     )
     cfg.update_daemon_field(new, "command", f"/{new}")
+
+
+def bridge(action: str) -> tuple[bool, str]:
+    """Start ("install") or stop ("uninstall") the env-bridge service through the
+    same code as `daimon bridge service`, so its token checks apply here too.
+    Output is captured for a notification instead of drawn over the TUI."""
+    res = subprocess.run(
+        [sys.executable, str(INSTALL_ROOT / "lib" / "bridge_service.py"), action],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return res.returncode == 0, (res.stdout + res.stderr).strip()
 
 
 def builder_argv() -> list[str]:

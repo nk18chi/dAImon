@@ -1,0 +1,29 @@
+[daemon]
+backend = "claude"
+# Fires once daily; discover.sh gates to Mon–Fri and skips if today's standup
+# was already posted (launchd can re-fire on wake/missed runs).
+schedule = { daily = "11:00", tz = "America/New_York" }
+command = "/slack-standup"
+stuck_after = 1800
+required_inputs = ["channel_id"]
+
+[inputs]
+# Slack channel the standup posts to. The Slack MCP tools come from the
+# user-level `slack` plugin (already OAuth'd) — no daimon mcp entry needed.
+channel_id = "CHANGE_ME"
+channel_name = "CHANGE_ME"
+# Timezone for the weekday / once-per-day gate — keep in sync with schedule tz.
+tz = "America/New_York"
+# Free-text prompt paragraph: how to query the work tracker (CLI to run, owner
+# handle, state names). Empty = skip tracker context and "next up".
+tracker_hints = ""
+# Free-text prompt paragraph: what else to look for — extra sections to split
+# out, extra sources to check (audit logs, own Slack activity, session
+# history), exclusions. Empty = default sections only.
+focus_hints = ""
+# Escape hatch: a skill that generates the whole standup (output posted
+# verbatim), replacing the built-in generator. Empty = use the built-in.
+standup_command = ""
+# Testing toggle: true = send to your own DM instead of channel_id and skip
+# state recording, so the next real run is unaffected. Flip off to go live.
+test_mode = false

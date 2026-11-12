@@ -24,12 +24,20 @@ usage: daimon <command> [args]
   launch <slug>      launch the agent now, bypassing gates
   watchdog           sweep orphan sessions, leaked MCP servers, old logs
   new                scaffold a new daemon (opens /daimon-builder in Claude)
-  sync               regenerate plists + render skills
+  sync [--all]       render skills + refresh registered plists (--all also creates missing ones)
   daemons            list discovered daemons
   state <slug>       show a daemon's work-tracking record (--clear to reset)
+                     (get [slug] / set [slug] read/write raw JSON — used by agents)
   rounds <slug>      per-item round-cap overrides (<item> <max> to set)
   skip <slug>        per-item exclusions (<item> to add, --clear to undo)
+  inbox take <slug>  drain a daemon's queued inbox messages, deduped, as JSON
+                     (--one: only the oldest; the next run takes the next)
+  check-scope [base] fail if the branch touches paths outside allowed_paths
   models <backend>   list available models (claude|codex)
+  mcp setup slack [client-id]
+                     create/connect a Codex app to Slack's hosted MCP server
+  mcp status slack   verify the Codex Slack MCP server is authenticated
+  mcp share slack    print the setup command for other workspace developers
   config <args...>   pass through to the config core (validate|get|daemon|...)
   validate           validate configuration
   doctor             preflight: tools, auth, hooks, skills, config
@@ -37,7 +45,12 @@ usage: daimon <command> [args]
   kill <slug|all>    hard-kill a daemon's run
   ps <slug|all>      show a daemon's process tree
   tui                open the control panel
+  bridge [args...]   run the env-bridge Slack app (slack run from its dir; args pass to slack)
+  bridge service install|uninstall|status
+                     run the bridge in the background (launchd), no terminal needed
+  command new <name> scaffold a slack-commands plugin (--shared to commit it, --mutating)
   install            install plists, hooks, and the TUI venv
+                     (--load schedules; --worklog adds the standup worklog hook)
 EOF
 }
 
@@ -49,10 +62,13 @@ case "$CMD" in
   new)       exec claude "/daimon-builder" ;;
   sync)      exec python3 -m daimon.sync "$@" ;;
   daemons)   exec python3 "$LIB/config.py" daemons ;;
-  state)     exec bash "$LIB/state-show.sh" "$@" ;;
+  state)     exec bash "$LIB/state.sh" "$@" ;;
   rounds)    exec bash "$LIB/round-caps.sh" "$@" ;;
   skip)      exec bash "$LIB/skips.sh" "$@" ;;
+  inbox)     exec python3 "$LIB/inbox_take.py" "$@" ;;
+  check-scope) exec bash "$LIB/check-scope.sh" "$@" ;;
   models)    exec python3 "$LIB/models.py" "$@" ;;
+  mcp)       exec python3 "$LIB/mcp_setup.py" "$@" ;;
   config)    exec python3 "$LIB/config.py" "$@" ;;
   validate)  exec python3 "$LIB/config.py" validate ;;
   doctor)    exec bash "$LIB/doctor.sh" ;;
@@ -60,6 +76,10 @@ case "$CMD" in
   kill)      exec bash "$LIB/kill.sh" "$@" ;;
   ps)        exec bash "$LIB/ps.sh" "$@" ;;
   tui)       exec "$ROOT/bin/daimonctl" "$@" ;;
+  bridge)
+    if [ "${1:-}" = service ]; then shift; exec python3 "$LIB/bridge_service.py" "$@"; fi
+    cd "$ROOT/bridges/env-bridge" && exec slack "${@:-run}" ;;
+  command)   exec python3 "$LIB/command_new.py" "$@" ;;
   install)   exec "$ROOT/bin/daimon-install" "$@" ;;
   help|-h|--help) usage ;;
   *)         echo "unknown command: $CMD" >&2; usage; exit 2 ;;

@@ -20,7 +20,7 @@ gh pr list --author "{{inputs.bot_author}}" --state open \
   --json number,title,headRefName,headRefOid,mergeable,labels,statusCheckRollup,url
 ```
 
-Your durable record is the JSON array at `$DAIMON_STATE_FILE`
+Your durable record is the JSON array from `daimon state get`
 (`[{number, headSha, action}]`). Read it first and skip any PR whose number +
 head SHA you have already recorded — a bump left for a human must not re-trigger
 every run. Write back every PR you act on this run.
@@ -83,5 +83,5 @@ Re-post nothing you already said on an earlier run for the same head SHA.
 ## 5. Finish
 
 Record each acted-on PR as `{number, headSha, action}` (`action` = `merged` or
-`held`) in `$DAIMON_STATE_FILE`. Keep the summary short: one line per PR — its
+`held`) with `daimon state set`. Keep the summary short: one line per PR — its
 package, level, and what you did.

@@ -1,0 +1,38 @@
+{
+  "name": "env-bridge",
+  "version": "1.0.0",
+  "description": "Thin Slack → local-agent bridge (Socket Mode → dAImon inbox)",
+  "type": "module",
+  "main": "app.js",
+  "scripts": {
+    "dev": "node --watch app.js",
+    "lint": "npx @biomejs/biome check *.js lib listeners scripts",
+    "lint:fix": "npx @biomejs/biome check --write *.js lib listeners scripts",
+    "manifest": "node scripts/generate-manifest.js",
+    "setup": "node scripts/setup.js",
+    "start": "node app.js",
+    "test": "node --test tests/**/*.spec.js"
+  },
+  "author": "Slack Technologies, LLC",
+  "license": "MIT",
+  "keywords": [
+    "slack",
+    "bolt",
+    "slackapi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/slack-samples/bolt-js-starter-template.git"
+  },
+  "bugs": {
+    "url": "https://github.com/slack-samples/bolt-js-starter-template/issues"
+  },
+  "dependencies": {
+    "@slack/bolt": "^5.0.0",
+    "dotenv": "~17.4.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@slack/cli-hooks": "^2.0.0"
+  }
+}

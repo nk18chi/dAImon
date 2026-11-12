@@ -78,6 +78,25 @@ class SkillsTest(unittest.TestCase):
         for needle in ("Review-only mode", "REQUEST_CHANGES", "Blocking", "Suggestion", "Findings"):
             self.assertIn(needle, rendered, f"review-prs skill missing: {needle}")
 
+    def test_review_prs_announces_pickup_before_reviewing(self):
+        skill = (DAEMONS / "review-prs" / "skill" / "SKILL.md").read_text()
+        for needle in (
+            "Announce pickup immediately",
+            "Reviewing this PR now",
+            "daimon:review-prs:<headSha>",
+            "issues/comments/<id>",
+            "Review complete",
+            "Do not leave a stale “Reviewing” notice",
+        ):
+            self.assertIn(needle, skill)
+        self.assertLess(skill.index("Reviewing this PR now"), skill.index("Read the diff"))
+
+    def test_slack_standup_monday_covers_weekend(self):
+        skill = (DAEMONS / "slack-standup" / "skill" / "SKILL.md").read_text()
+        self.assertIn("On Monday", skill)
+        for day in ("Friday", "Saturday", "Sunday"):
+            self.assertIn(day, skill, f"Monday standup window must include {day}")
+
 
 if __name__ == "__main__":
     unittest.main()

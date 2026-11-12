@@ -40,7 +40,7 @@ fi
 # inbox check so an explicitly queued message is never deferred; the count is
 # recorded in launch.sh's budget_record.
 source "$DAIMON_LIB_DIR/budget.sh"
-budget_check
+budget_check "$SLUG"
 if [ "${BUDGET_OVER:-0}" -eq 1 ]; then log_event "$SLUG" skip "$BUDGET_REASON" >> "$OPLOG"; exit 0; fi
 
 DISCOVER="$DAIMON_INSTALL_ROOT/daemons/$SLUG/discover.sh"

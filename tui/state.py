@@ -20,7 +20,7 @@ def label_for(cfg, slug: str) -> str:
 
 def candidate_sessions(cfg, slug: str) -> list[str]:
     ns = cfg.core["namespace"]
-    return [f"{ns}-{slug}", f"{ns}-{slug}-claude"]
+    return [f"{ns}-{slug}", *(f"{ns}-{slug}-{backend}" for backend in cfg.backends(slug))]
 
 
 def live_sessions() -> set[str]:
@@ -48,6 +48,19 @@ def session_runtime(session: str) -> str:
 def launchd_loaded(label: str, text: str | None = None) -> bool:
     listing = text if text is not None else sh("launchctl", "list")
     return any(label in line for line in listing.splitlines())
+
+
+def bridge_state(cfg, listing: str | None = None) -> tuple[str, str | None]:
+    """The env-bridge service from `launchctl list` (PID, status, label per line;
+    PID "-" = loaded but not running): ("running", pid) | ("loaded", None) |
+    ("off", None)."""
+    label = f"com.{cfg.core['namespace']}.bridge"
+    text = listing if listing is not None else sh("launchctl", "list")
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] == label:
+            return ("running", parts[0]) if parts[0].isdigit() else ("loaded", None)
+    return ("off", None)
 
 
 def plist_path(cfg, slug: str) -> Path:

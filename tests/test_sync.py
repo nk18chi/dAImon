@@ -54,7 +54,7 @@ class MaterializeTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_materialize_renders_skill_into_claude_skills(self):
-        cfg = self.sync.materialize(self.config)
+        cfg, _ = self.sync.materialize(self.config)
         self.assertIn("alpha", cfg.discover())
         skill = self.home / ".claude" / "skills" / "alpha" / "SKILL.md"
         self.assertTrue(skill.exists())
@@ -66,6 +66,25 @@ class MaterializeTest(unittest.TestCase):
         with patch.object(self.sync.sys, "platform", "darwin"):
             self.sync.materialize(self.config)
         self.assertTrue((agents / "com.testns.alpha.plist").exists())
+
+    def test_materialize_without_create_missing_skips_unregistered(self):
+        agents = self.home / "Library" / "LaunchAgents"
+        with patch.object(self.sync.sys, "platform", "darwin"):
+            _, skipped = self.sync.materialize(self.config, create_missing=False)
+        self.assertEqual(skipped, ["alpha"])
+        self.assertFalse((agents / "com.testns.alpha.plist").exists())
+        skill = self.home / ".claude" / "skills" / "alpha" / "SKILL.md"
+        self.assertTrue(skill.exists())
+
+    def test_materialize_without_create_missing_refreshes_existing(self):
+        agents = self.home / "Library" / "LaunchAgents"
+        agents.mkdir(parents=True)
+        plist = agents / "com.testns.alpha.plist"
+        plist.write_text("stale")
+        with patch.object(self.sync.sys, "platform", "darwin"):
+            _, skipped = self.sync.materialize(self.config, create_missing=False)
+        self.assertEqual(skipped, [])
+        self.assertNotEqual(plist.read_text(), "stale")
 
 
 if __name__ == "__main__":

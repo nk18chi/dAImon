@@ -20,3 +20,4 @@ epic_id = ""
 # so each story-filing daemon sets its own in [inputs]. Must match the option
 # label in Shortcut exactly — an unrecognized value fails the create.
 product_area = ""
+exclude_epics = []

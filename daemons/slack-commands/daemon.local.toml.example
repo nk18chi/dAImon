@@ -1,0 +1,9 @@
+# Machine-specific overrides for slack-commands. Copy to daemon.local.toml.
+[daemon]
+# Repo the command runbooks operate on.
+working_dir = "~/src/my-repo"
+danger = true
+
+[inputs]
+# Slack user IDs allowed to run mutating commands (deploys, syncs).
+mutate_allowlist = ["U0123456789"]

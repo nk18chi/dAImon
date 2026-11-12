@@ -1,0 +1,28 @@
+[daemon]
+backend = "claude"
+# Gate-only daemon: discover.sh enqueues the command and always reports "no
+# work", so this daemon itself never launches an agent. The slack-commands
+# engine does the actual run. Copy the folder to schedule more than one
+# command (one command per daemon instance).
+schedule = { daily = "16:00", tz = "America/New_York" }
+command = "/scheduled-command"
+stuck_after = 600
+required_inputs = ["command_text", "channel"]
+
+[inputs]
+# The command to run, exactly as someone would type it after the trigger
+# prefix — e.g. "bazaar-update post" or "epic-health 48227".
+command_text = "CHANGE_ME"
+# Channel the engine replies in (the command's own runbook may post
+# elsewhere too).
+channel = "CHANGE_ME"
+# Weekdays this fires: 1=Mon … 7=Sun. Empty = every day the schedule fires.
+days = [5]
+# Timezone for the day gate — keep in sync with the schedule's tz.
+tz = "America/New_York"
+# Slack user id the command runs AS: authorization (mutating/admin tiers) is
+# evaluated against this, so it must be an allowlisted id for restricted
+# commands.
+as_user = "CHANGE_ME"
+# Engine daemon whose inbox receives the command.
+target = "slack-commands"

@@ -11,6 +11,7 @@ log_keep = 3
 
 [defaults]
 backend = "claude"
+# fallback_backend = "codex"  # only used when Claude reports provider-cap exhaustion
 model = "opus"
 danger = true
 stuck_after = 2700
@@ -25,6 +26,9 @@ severe_critical = ["reply-to-comments"]
 [budget]
 hourly_cap = 12
 defer_at_pct = 80
+# Daemons whose launches never count against or defer on the cap — for
+# cheap, short-lived high-frequency pollers (e.g. "slack-channel-watch").
+exempt = []
 
 [daemons]
 disabled = []

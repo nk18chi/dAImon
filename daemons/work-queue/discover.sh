@@ -9,7 +9,8 @@ source "$(dirname "$0")/../../profiles/shortcut/lib.sh"
 source "$(dirname "$0")/../../profiles/github/lib.sh"
 
 base="label:\"$DAIMON_INPUT_READY_LABEL\" \
-  !label:\"$DAIMON_INPUT_SKIP_LABEL\" !state:\"$DAIMON_INPUT_IN_PROGRESS_STATE\""
+  !label:\"$DAIMON_INPUT_SKIP_LABEL\" !state:\"$DAIMON_INPUT_IN_PROGRESS_STATE\"\
+$(shortcut_exclusions)"
 
 ready=$(shortcut_owner_count "$base") || exit 1
 
