@@ -199,6 +199,25 @@ rule it applies, in the reply style below.
 Someone reported a bug. Make the report clear enough for engineering to pick
 up.
 
+Investigate before you answer. Take the time this needs — several minutes is
+fine for a bug report — and only call something a guess after these checks:
+
+- **Look up every record the thread names** (account, user, booking, guide,
+  conversation), even if someone says it's already fixed. Fixing a field
+  doesn't erase the record: when it was created and last changed is often the
+  clue.
+- **When something didn't happen** (a sync, an email, a notification, an
+  assignment), "no errors in the logs" proves nothing — a step that never ran
+  logs no error. Take the record's exact time and search the logs around it
+  (a few minutes either side) for the step that should have run, and for what
+  else happened then, such as a service restarting or a release. A log line
+  that's missing where it should be is evidence.
+- **Check whether it's one case or a pattern**: look for other records with
+  the same symptom over the last couple of weeks, and what they have in
+  common. That's how you tell the reporter's theory from the real cause.
+
+Then reply:
+
 1. Say the most likely cause in a sentence or two, in product terms ("bookings
    made before the guide accepts are skipped"), checked against the code (and
    data, if you have it). Say plainly if it's a guess. Never where in the code,
