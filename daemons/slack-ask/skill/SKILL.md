@@ -299,12 +299,13 @@ within a few seconds and deletes it:
 `{{state_dir}}/outbox/slack-ask/<channel>-<ts>.json`
 
 ```json
-{"channel": "<channel>", "thread_ts": "<thread_ts>", "text": "<the reply>"}
+{"channel": "<channel>", "thread_ts": "<thread_ts>", "ts": "<ts>", "text": "<the reply>"}
 ```
 
 It must be valid JSON — escape newlines as `\n` and quotes as `\"` in `text`.
-`channel` and `thread_ts` come from the message; the bridge refuses any other
-channel.
+`channel`, `thread_ts` and `ts` come from the message; the bridge refuses any
+other channel. `ts` is the question's own message: once the reply is posted,
+the bridge marks it ✅ in place of the 👀 it added when the question came in.
 
 ## 7. Log it
 

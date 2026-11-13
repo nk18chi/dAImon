@@ -74,6 +74,23 @@ test("removes that thread's downloaded images once the answer is posted", async 
   assert.deepEqual(await fs.readdir(images), ['CASK-2.0'], 'only the answered thread is cleaned up');
 });
 
+test("marks the question answered: 👀 off, ✅ on", async () => {
+  const reactions = [];
+  const reacting = {
+    chat: client.chat,
+    reactions: {
+      add: async (args) => reactions.push(['add', args.name, args.timestamp]),
+      remove: async (args) => reactions.push(['remove', args.name, args.timestamp]),
+    },
+  };
+  await put('CASK-1.json', { channel: 'CASK', thread_ts: '1.0', ts: '1.5', text: 'hi' });
+  await flushOutbox(reacting, allowed, null, dir, await fs.mkdtemp(path.join(os.tmpdir(), 'images-')));
+  assert.deepEqual(reactions, [
+    ['remove', 'eyes', '1.5'],
+    ['add', 'white_check_mark', '1.5'],
+  ]);
+});
+
 test('keeps the images when the answer could not be posted', async () => {
   const images = await fs.mkdtemp(path.join(os.tmpdir(), 'images-'));
   await fs.mkdir(path.join(images, 'CFAIL-1.0'), { recursive: true });

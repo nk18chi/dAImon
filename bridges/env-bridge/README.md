@@ -102,4 +102,7 @@ committed source of truth is `manifest.template.json`.
   once its answer is posted; a sweep removes any left after a day. This needs
   the `files:read` scope: after adding it to an existing app, reinstall the
   app in the workspace. Without it, images are skipped and logged.
+- With the `reactions:write` scope, the app marks each question 👀 when it's
+  queued, ✅ once its answer is posted, and 🚫 when it's over the daily limit.
+  Without the scope it posts ":mag: looking into it…" instead of 👀.
 - `.scrap/` holds unused Slack starter-template parts; delete it freely.

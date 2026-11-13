@@ -123,9 +123,10 @@ Slack scope.
 
 It answers **one question per run**, oldest first, each in a fresh session, so
 one question's thread never mixes with another's and a crash costs at most one
-question. When several arrive at once, the first gets ":mag: looking into it…"
-and the rest get ":hourglass_flowing_sand: got it — N questions ahead of
-yours"; each run starts the next until the queue is empty. Each run pays a short
+question. Each question gets a 👀 reaction as soon as it arrives, which turns
+into ✅ once the answer is posted. When others are ahead of it, the bot also
+replies ":hourglass_flowing_sand: got it — N questions ahead of yours"; each
+run starts the next until the queue is empty. Each run pays a short
 startup (roughly 20–30 seconds), so a long queue drains steadily rather than
 all at once.
 
@@ -133,9 +134,9 @@ all at once.
 together 100 (`BRIDGE_ASK_DAILY_LIMIT` and `BRIDGE_ASK_DAILY_TEAM_LIMIT` in
 the bridge's `.env`). The limit caps what a stolen Slack session could pull out
 or cost before someone notices. The bridge enforces it before a question is
-queued, so a refused question starts no run. The first refusal of the day gets
-one reply in the thread; after that the bot stays quiet, so a flood can't make
-it spam the channel. Every refusal is logged in the bridge log. Counts reset at
+queued, so a refused question starts no run. Every refused question gets a 🚫
+reaction; only the first of the day also gets a reply, so a flood can't make
+the bot spam the channel. Every refusal is logged in the bridge log. Counts reset at
 local midnight and survive a bridge restart.
 
 **Setup** (start with a throwaway test channel):
