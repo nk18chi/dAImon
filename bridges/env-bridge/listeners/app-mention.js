@@ -4,6 +4,7 @@ import { imageCollector, questionDir } from '../lib/images.js';
 import { checkAndCount, refusalText } from '../lib/limits.js';
 import { messageLinks } from '../lib/links.js';
 import { ackText, isRunning } from '../lib/queue.js';
+import { react } from '../lib/reactions.js';
 import { threadEntry } from '../lib/thread-entry.js';
 
 const THREAD_LIMIT = 50;
@@ -49,9 +50,12 @@ export async function appMention({ event, client, say, logger }) {
   const limit = await checkAndCount(event.user ?? 'unknown');
   if (!limit.allowed) {
     logger?.warn(`ask limit: refused ${event.user} in ${event.channel} (${limit.reason} daily limit)`);
+    await react(client, event.channel, event.ts, 'no_entry', logger);
     if (limit.notify) await say({ thread_ts: threadTs, text: refusalText(limit.reason) });
     return;
   }
+  // Seen, right away: reading the thread and its images can take a few seconds.
+  const seen = await react(client, event.channel, event.ts, 'eyes', logger);
   const collectImages = imageCollector({
     dir: questionDir(event.channel, threadTs, event.ts),
     token: client.token ?? process.env.SLACK_BOT_TOKEN,
@@ -74,5 +78,8 @@ export async function appMention({ event, client, say, logger }) {
   // Check before enqueueing: the enqueue starts a run for this very question.
   const busy = await isRunning('slack-ask');
   const queued = await enqueueCommand(msg, logger, 'slack-ask');
-  await say({ thread_ts: threadTs, text: ackText(queued - 1 + (busy ? 1 : 0)) });
+  const ahead = queued - 1 + (busy ? 1 : 0);
+  // 👀 says "on it"; a message is only worth posting when it adds something —
+  // how many are ahead — or when the reaction couldn't be added.
+  if (ahead > 0 || !seen) await say({ thread_ts: threadTs, text: ackText(ahead) });
 }

@@ -29,7 +29,7 @@
   },
   "oauth_config": {
     "scopes": {
-      "bot": ["app_mentions:read", "channels:history", "groups:history", "chat:write", "commands", "files:read"]
+      "bot": ["app_mentions:read", "channels:history", "groups:history", "chat:write", "commands", "files:read", "reactions:write"]
     }
   },
   "settings": {

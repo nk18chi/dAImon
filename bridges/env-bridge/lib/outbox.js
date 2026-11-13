@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { STATE_DIR } from './enqueue.js';
 import { IMAGES_DIR, removeThreadImages } from './images.js';
+import { react, unreact } from './reactions.js';
 
 export const OUTBOX = path.join(STATE_DIR, 'outbox', 'slack-ask');
 const POLL_MS = 2000;
@@ -35,7 +36,7 @@ export async function flushOutbox(client, allowedChannels, logger, dir = OUTBOX,
       }
       continue;
     }
-    const { channel, thread_ts: threadTs, text } = reply ?? {};
+    const { channel, thread_ts: threadTs, ts, text } = reply ?? {};
     if (!allowedChannels.has(channel) || typeof threadTs !== 'string' || typeof text !== 'string' || !text) {
       await setAside(file, 'rejected', 'needs channel (an ask channel), thread_ts and text', logger);
       continue;
@@ -51,6 +52,11 @@ export async function flushOutbox(client, allowedChannels, logger, dir = OUTBOX,
     await removeThreadImages(channel, threadTs, imagesDir).catch((err) =>
       logger?.warn(`outbox: removing images for ${channel}/${threadTs} failed: ${err.message}`),
     );
+    // Mark the question answered: 👀 becomes ✅.
+    if (typeof ts === 'string') {
+      await unreact(client, channel, ts, 'eyes', logger);
+      await react(client, channel, ts, 'white_check_mark', logger);
+    }
   }
 }
 
