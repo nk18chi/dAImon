@@ -53,10 +53,12 @@ you have, say so in the reply.
 Each message has `command` (the question, mention stripped), `channel`, `ts`,
 `thread_ts`, `user`, and `thread`: the whole thread up to and including this
 mention, oldest first, as `{user, bot, text}` entries, read by the bridge when
-the mention arrived. `bot` is true for any app's post: your own earlier
-answers and status notes, but also a workflow's, such as an issue-report form
-— a form post that opens the thread is the report itself, so read it as the
-question's context. It may also have
+the mention arrived. `bot` is true for any app's post, and `app` names the
+app: your own earlier answers and status notes, but also a workflow's, such as
+an issue-report form — a form post that opens the thread is the report itself,
+so read it as the question's context. An entry may have `cards`: link previews
+as `{title, link, source}`. A post by the Shortcut app, or a card linking to
+`app.shortcut.com/…/story/…`, means a Shortcut story exists for this thread. It may also have
 `linked`: threads from this channel that the asker linked to in the question,
 as `{url, thread}` entries with `thread` in the same shape (empty if it
 couldn't be read). A thread entry may also have `images` (paths to screenshots
@@ -240,6 +242,13 @@ Then reply:
    expected), ask for them — at most three, short — and end with "tag me again
    with the answers".
 3. Do not file tickets, open PRs, or promise fixes.
+4. If the thread has no Shortcut story yet (no post by the Shortcut app and no
+   card linking to a story), end the reply with this line on its own — you
+   only suggest it, never create it:
+   `:memo: There's no Shortcut story for this yet — worth creating one from the report so it's tracked.`
+   Add the same line under a change-request decline in this playbook, since
+   those still need someone to pick them up. Leave it off when a story exists,
+   and off the off-topic and security replies.
 
 ## Reply style
 
