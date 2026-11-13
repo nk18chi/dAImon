@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { threadEntry } from '../lib/thread-entry.js';
+import { threadEntry } from '../lib/thread.js';
 
 test('a person keeps user and text, with no app or cards', () => {
   assert.deepEqual(threadEntry({ user: 'U1', text: 'hi' }), { user: 'U1', bot: false, text: 'hi' });

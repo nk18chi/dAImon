@@ -34,7 +34,7 @@
   },
   "settings": {
     "event_subscriptions": {
-      "bot_events": ["app_mention"]
+      "bot_events": ["app_mention", "message.channels"]
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": true,
