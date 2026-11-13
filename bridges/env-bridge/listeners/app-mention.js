@@ -1,5 +1,6 @@
 import { ASK_CHANNELS } from '../lib/ask-channels.js';
 import { enqueueCommand } from '../lib/enqueue.js';
+import { imageCollector, questionDir } from '../lib/images.js';
 import { checkAndCount, refusalText } from '../lib/limits.js';
 import { messageLinks } from '../lib/links.js';
 import { ackText, isRunning } from '../lib/queue.js';
@@ -7,19 +8,23 @@ import { ackText, isRunning } from '../lib/queue.js';
 const THREAD_LIMIT = 50;
 
 /** The thread so far, oldest first. slack-ask has no Slack access of its own,
- * so this is the only conversation it sees. */
-async function readThread(client, channel, threadTs, logger) {
+ * so this is the only conversation it sees. Images attached to its messages
+ * are downloaded through `collectImages`, which caps them per question. */
+async function readThread(client, channel, threadTs, logger, collectImages) {
+  let messages;
   try {
-    const { messages = [] } = await client.conversations.replies({
-      channel,
-      ts: threadTs,
-      limit: THREAD_LIMIT,
-    });
-    return messages.map((m) => ({ user: m.user, bot: Boolean(m.bot_id), text: m.text }));
+    ({ messages = [] } = await client.conversations.replies({ channel, ts: threadTs, limit: THREAD_LIMIT }));
   } catch (err) {
     logger?.error(`reading thread ${channel}/${threadTs} failed: ${err.message}`);
     return [];
   }
+  const entries = [];
+  for (const m of messages) {
+    const entry = { user: m.user, bot: Boolean(m.bot_id), text: m.text };
+    if (m.files?.length) Object.assign(entry, await collectImages(m.files));
+    entries.push(entry);
+  }
+  return entries;
 }
 
 export async function appMention({ event, client, say, logger }) {
@@ -46,14 +51,24 @@ export async function appMention({ event, client, say, logger }) {
     if (limit.notify) await say({ thread_ts: threadTs, text: refusalText(limit.reason) });
     return;
   }
-  msg.thread = await readThread(client, event.channel, threadTs, logger);
+  const collectImages = imageCollector({
+    dir: questionDir(event.channel, threadTs, event.ts),
+    token: client.token ?? process.env.SLACK_BOT_TOKEN,
+    logger,
+  });
+  msg.thread = await readThread(client, event.channel, threadTs, logger, collectImages);
   const links = messageLinks(event.text, event.channel);
   if (links.elsewhere.length) logger?.info(`ignored ${links.elsewhere.length} link(s) to other channels`);
   const linked = links.kept.filter((l) => l.threadTs !== threadTs);
   if (linked.length) {
-    msg.linked = await Promise.all(
-      linked.map(async (l) => ({ url: l.url, thread: await readThread(client, event.channel, l.threadTs, logger) })),
-    );
+    // One at a time, so the asker's own thread gets the image budget first.
+    msg.linked = [];
+    for (const l of linked) {
+      msg.linked.push({
+        url: l.url,
+        thread: await readThread(client, event.channel, l.threadTs, logger, collectImages),
+      });
+    }
   }
   // Check before enqueueing: the enqueue starts a run for this very question.
   const busy = await isRunning('slack-ask');

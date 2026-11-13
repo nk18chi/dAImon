@@ -64,3 +64,20 @@ test('ignores files that are not pending replies', async () => {
   await flushOutbox(client, allowed, null, dir);
   assert.deepEqual(posted, []);
 });
+
+test("removes that thread's downloaded images once the answer is posted", async () => {
+  const images = await fs.mkdtemp(path.join(os.tmpdir(), 'images-'));
+  await fs.mkdir(path.join(images, 'CASK-1.0', '1.5'), { recursive: true });
+  await fs.mkdir(path.join(images, 'CASK-2.0', '2.5'), { recursive: true });
+  await put('CASK-1.json', { channel: 'CASK', thread_ts: '1.0', text: 'hi' });
+  await flushOutbox(client, allowed, null, dir, images);
+  assert.deepEqual(await fs.readdir(images), ['CASK-2.0'], 'only the answered thread is cleaned up');
+});
+
+test('keeps the images when the answer could not be posted', async () => {
+  const images = await fs.mkdtemp(path.join(os.tmpdir(), 'images-'));
+  await fs.mkdir(path.join(images, 'CFAIL-1.0'), { recursive: true });
+  await put('CFAIL-1.json', { channel: 'CFAIL', thread_ts: '1.0', text: 'hi' });
+  await flushOutbox(client, allowed, null, dir, images);
+  assert.deepEqual(await fs.readdir(images), ['CFAIL-1.0']);
+});

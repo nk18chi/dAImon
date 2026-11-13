@@ -96,4 +96,10 @@ committed source of truth is `manifest.template.json`.
   reads the thread, plus up to three same-channel threads the question links
   to, into the queued message, then posts the daemon's reply as
   this bot from `<state dir>/outbox/slack-ask/` — only into an ask channel.
+- Images attached in those threads (PNG, JPG, GIF or WebP, at most 4 per
+  question, 5 MB each) are downloaded to
+  `<state dir>/runtime/slack-ask-images/` for the bot to look at, and deleted
+  once its answer is posted; a sweep removes any left after a day. This needs
+  the `files:read` scope: after adding it to an existing app, reinstall the
+  app in the workspace. Without it, images are skipped and logged.
 - `.scrap/` holds unused Slack starter-template parts; delete it freely.

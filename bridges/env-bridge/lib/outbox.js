@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { STATE_DIR } from './enqueue.js';
+import { IMAGES_DIR, removeThreadImages } from './images.js';
 
 export const OUTBOX = path.join(STATE_DIR, 'outbox', 'slack-ask');
 const POLL_MS = 2000;
@@ -15,7 +16,7 @@ async function setAside(file, suffix, reason, logger) {
 /** Post the replies slack-ask left in its outbox, as this bot, then remove
  * them. The daemon has no Slack access of its own, so this is its only way to
  * answer — and only into a thread in one of the ask channels. */
-export async function flushOutbox(client, allowedChannels, logger, dir = OUTBOX) {
+export async function flushOutbox(client, allowedChannels, logger, dir = OUTBOX, imagesDir = IMAGES_DIR) {
   let names;
   try {
     names = await fs.readdir(dir);
@@ -44,7 +45,12 @@ export async function flushOutbox(client, allowedChannels, logger, dir = OUTBOX)
       await fs.unlink(file);
     } catch (err) {
       await setAside(file, 'failed', `could not be posted: ${err.message}`, logger);
+      continue;
     }
+    // The answer is out, so the screenshots it looked at go.
+    await removeThreadImages(channel, threadTs, imagesDir).catch((err) =>
+      logger?.warn(`outbox: removing images for ${channel}/${threadTs} failed: ${err.message}`),
+    );
   }
 }
 
