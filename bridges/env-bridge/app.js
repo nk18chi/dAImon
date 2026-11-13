@@ -10,6 +10,7 @@ import { App, LogLevel } from '@slack/bolt';
 import { ASK_CHANNELS } from './lib/ask-channels.js';
 import { startImageSweep } from './lib/images.js';
 import { startOutbox } from './lib/outbox.js';
+import { startReportSweep } from './lib/reports.js';
 import { registerListeners } from './listeners/index.js';
 
 // Setup gate: the manifest is generated per-instance and untracked, so a
@@ -40,6 +41,7 @@ registerListeners(app);
     await app.start();
     startOutbox(app.client, ASK_CHANNELS, app.logger);
     startImageSweep(app.logger);
+    await startReportSweep(app.client, app.logger);
     app.logger.info('⚡️ Bolt app is running!');
   } catch (error) {
     app.logger.error('Failed to start the app', error);

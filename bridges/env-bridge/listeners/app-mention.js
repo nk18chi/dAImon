@@ -5,29 +5,7 @@ import { checkAndCount, refusalText } from '../lib/limits.js';
 import { messageLinks } from '../lib/links.js';
 import { ackText, isRunning } from '../lib/queue.js';
 import { react } from '../lib/reactions.js';
-import { threadEntry } from '../lib/thread-entry.js';
-
-const THREAD_LIMIT = 50;
-
-/** The thread so far, oldest first. slack-ask has no Slack access of its own,
- * so this is the only conversation it sees. Images attached to its messages
- * are downloaded through `collectImages`, which caps them per question. */
-async function readThread(client, channel, threadTs, logger, collectImages) {
-  let messages;
-  try {
-    ({ messages = [] } = await client.conversations.replies({ channel, ts: threadTs, limit: THREAD_LIMIT }));
-  } catch (err) {
-    logger?.error(`reading thread ${channel}/${threadTs} failed: ${err.message}`);
-    return [];
-  }
-  const entries = [];
-  for (const m of messages) {
-    const entry = threadEntry(m);
-    if (m.files?.length) Object.assign(entry, await collectImages(m.files));
-    entries.push(entry);
-  }
-  return entries;
-}
+import { readThread } from '../lib/thread.js';
 
 export async function appMention({ event, client, say, logger }) {
   const text = event.text.replace(/<@[^>]+>/g, '').trim();

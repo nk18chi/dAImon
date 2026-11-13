@@ -84,6 +84,19 @@ class InboxTakeTest(unittest.TestCase):
         left = json.loads(self.inbox.read_text())["messages"]
         self.assertEqual([m["ts"] for m in left], ["4.0"])
 
+    def test_limit_takes_a_persons_question_before_automatic_reports(self):
+        self._queue(
+            {"to": "ask", "channel": "C1", "ts": "1.0", "via": "report"},
+            {"to": "ask", "channel": "C1", "ts": "2.0", "via": "report"},
+            {"to": "ask", "channel": "C1", "ts": "3.0", "via": "mention"},
+        )
+        took = inbox_take.take(self.inbox, self.state, "ask", limit=1)
+        self.assertEqual([m["ts"] for m in took], ["3.0"])
+        took = inbox_take.take(self.inbox, self.state, "ask", limit=1)
+        self.assertEqual([m["ts"] for m in took], ["1.0"], "then reports, oldest first")
+        left = json.loads(self.inbox.read_text())["messages"]
+        self.assertEqual([m["ts"] for m in left], ["2.0"])
+
     def test_usage_error(self):
         self.assertEqual(inbox_take.main(["drain", "ask"]), 2)
         self.assertEqual(inbox_take.main(["take", "ask", "--all"]), 2)

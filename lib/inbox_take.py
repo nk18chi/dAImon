@@ -50,11 +50,16 @@ def take(inbox_path: Path, state_path: Path, slug: str, limit: int | None = None
         state = {}
     handled = list(state.get("handled_keys", []))
     seen = set(handled)
-    fresh, keep = [], []
-    for m in messages:
-        if m.get("to") != slug or (limit is not None and len(fresh) >= limit):
-            keep.append(m)
-            continue
+    mine = [m for m in messages if m.get("to") == slug]
+    if limit is not None:
+        # A person's question goes before automatic work (a first look at a new
+        # report): someone is waiting on it. Stable, so each group stays oldest-first.
+        mine.sort(key=lambda m: m.get("via") == "report")
+    fresh, taken = [], set()
+    for m in mine:
+        if limit is not None and len(fresh) >= limit:
+            break
+        taken.add(id(m))
         key = f"{m.get('channel', '')}:{m.get('ts', '')}"
         # A message without a ts has no stable identity; pass it through rather
         # than collapse every such message onto one key.
@@ -64,6 +69,7 @@ def take(inbox_path: Path, state_path: Path, slug: str, limit: int | None = None
             seen.add(key)
             handled.append(key)
         fresh.append(m)
+    keep = [m for m in messages if id(m) not in taken]
     if len(keep) == len(messages):
         return []
     _write_atomic(inbox_path, {"messages": keep})

@@ -19,7 +19,9 @@ async function readInbox() {
 /** Append a command message to the daimon inbox and nudge the daemon.
  * The inbox gate in daimon's run.sh launches immediately when a message
  * is addressed to the target daemon — this is the whole bridge.
- * Returns how many messages now wait for the target, this one included. */
+ * Returns how many messages now wait for the target, this one included —
+ * for a person's question, not counting automatic report looks, which it
+ * goes ahead of (see inbox_take.py). */
 export async function enqueueCommand(msg, logger, target = DEFAULT_TARGET) {
   const inbox = await readInbox();
   inbox.messages = [...(inbox.messages ?? []), { to: target, ...msg }];
@@ -28,5 +30,6 @@ export async function enqueueCommand(msg, logger, target = DEFAULT_TARGET) {
   execFile(DAIMON, ['run', target], (err) => {
     if (err) logger?.error(`daimon run ${target} failed: ${err.message}`);
   });
-  return inbox.messages.filter((m) => m.to === target).length;
+  const counts = (m) => m.to === target && (msg.via === 'report' || m.via !== 'report');
+  return inbox.messages.filter(counts).length;
 }

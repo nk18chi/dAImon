@@ -130,6 +130,17 @@ run starts the next until the queue is empty. Each run pays a short
 startup (roughly 20–30 seconds), so a long queue drains steadily rather than
 all at once.
 
+**Automatic first looks.** In an issue-report channel
+(`BRIDGE_REPORT_CHANNELS`), the bot doesn't wait to be tagged: every new post
+by the report form (`BRIDGE_REPORT_APP_ID`) gets a first look, posted in its
+thread and labeled as automatic. Only the form's own top-level posts start
+one; replies, people's messages and other apps never do. Slack notifies the
+bridge as reports are posted, and a sweep every 5 minutes picks up any it
+missed while the Mac was asleep (never reaching back before the bridge
+started). A person's question always goes ahead of these in the queue, and
+they're capped at 20 a day (`BRIDGE_REPORT_DAILY_LIMIT`), apart from the
+question limits. It needs the app's `message.channels` event subscription.
+
 **Daily limits.** Each person can ask 30 questions a day, and everyone
 together 100 (`BRIDGE_ASK_DAILY_LIMIT` and `BRIDGE_ASK_DAILY_TEAM_LIMIT` in
 the bridge's `.env`). The limit caps what a stolen Slack session could pull out
