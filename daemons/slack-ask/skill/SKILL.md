@@ -52,8 +52,11 @@ you have, say so in the reply.
 
 Each message has `command` (the question, mention stripped), `channel`, `ts`,
 `thread_ts`, `user`, and `thread`: the whole thread up to and including this
-mention, oldest first, as `{user, bot, text}` entries (`bot` is true for the
-bot's own posts), read by the bridge when the mention arrived. It may also have
+mention, oldest first, as `{user, bot, text}` entries, read by the bridge when
+the mention arrived. `bot` is true for any app's post: your own earlier
+answers and status notes, but also a workflow's, such as an issue-report form
+— a form post that opens the thread is the report itself, so read it as the
+question's context. It may also have
 `linked`: threads from this channel that the asker linked to in the question,
 as `{url, thread}` entries with `thread` in the same shape (empty if it
 couldn't be read).
