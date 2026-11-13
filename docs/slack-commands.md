@@ -113,6 +113,14 @@ doesn't read the rest of the channel, and it can't open any other link (web
 pages, documents, tickets, other channels); it asks people to paste the
 relevant part instead.
 
+It also looks at screenshots attached in those threads: up to four images per
+question (PNG, JPG, GIF or WebP, 5 MB each). Videos, PDFs and other files are
+skipped, and it asks for what they show in words. The images are downloaded to
+your Mac only for the run and deleted once the answer is posted. They often
+show emails, names or message text, so the bot reads them as evidence and
+never repeats personal details from them. This needs the bot's `files:read`
+Slack scope.
+
 It answers **one question per run**, oldest first, each in a fresh session, so
 one question's thread never mixes with another's and a crash costs at most one
 question. When several arrive at once, the first gets ":mag: looking into it…"
