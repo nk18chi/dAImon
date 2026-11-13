@@ -4,6 +4,7 @@ import { imageCollector, questionDir } from '../lib/images.js';
 import { checkAndCount, refusalText } from '../lib/limits.js';
 import { messageLinks } from '../lib/links.js';
 import { ackText, isRunning } from '../lib/queue.js';
+import { threadEntry } from '../lib/thread-entry.js';
 
 const THREAD_LIMIT = 50;
 
@@ -20,7 +21,7 @@ async function readThread(client, channel, threadTs, logger, collectImages) {
   }
   const entries = [];
   for (const m of messages) {
-    const entry = { user: m.user, bot: Boolean(m.bot_id), text: m.text };
+    const entry = threadEntry(m);
     if (m.files?.length) Object.assign(entry, await collectImages(m.files));
     entries.push(entry);
   }
