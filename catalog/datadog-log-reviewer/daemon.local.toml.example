@@ -1,0 +1,8 @@
+# Copy to ~/.daimon/daemons/datadog-log-reviewer.toml (daimon init does it)
+# and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose production logs this daemon reviews
+
+[inputs]
+# Scope this to your service and environment, e.g. "status:error service:web env:prod".
+log_query = "status:error service:your-service env:prod"

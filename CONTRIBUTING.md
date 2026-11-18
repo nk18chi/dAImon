@@ -32,9 +32,10 @@ CI runs the same checks on every pull request (`.github/workflows/ci.yml`); a gr
 - **Never commit machine-local config or secrets.** `*.local.toml`, `config/daimon.toml`,
   and `.env` are gitignored. Add new machine-specific settings as a tracked
   `*.local.toml.example`, not a real value.
-- **Keep daemons self-contained** — a daemon is a folder under `daemons/<slug>/`; the
-  framework auto-discovers it. Run `daimon sync` after editing a `daemon.toml` or skill.
-- **Daemon READMEs are generated** — `daemons/*/README.md` and `daemons/README.md`
+- **Keep daemons self-contained** — a dAImon daemon is a folder under
+  `catalog/<slug>/` (`daimon scaffold <slug> --catalog`); team-specific ones go in
+  a pack instead. Run `daimon sync` after editing a `daemon.toml` or skill.
+- **Daemon READMEs are generated** — `catalog/*/README.md` and `catalog/README.md`
   are built from each `daemon.toml` + `SKILL.md`. Don't hand-edit them; change the
   metadata and run `make docs`. CI (`tests/test_docs.py`) fails if they're stale.
 - Match the style of the surrounding code; keep functions small and comments scarce.

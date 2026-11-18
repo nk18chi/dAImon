@@ -1,0 +1,7 @@
+# Copy to ~/.daimon/daemons/story-reviewer.toml (daimon init does it)
+# and set values for THIS machine.
+[daemon]
+working_dir = "~/code"   # a directory containing the repos your stories touch
+
+[inputs]
+repos = ["your-repo"]    # repos under working_dir this daemon may investigate

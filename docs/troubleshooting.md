@@ -9,8 +9,8 @@ Run `daimon doctor` first — it checks most of the below and points at the fix.
 
 ## A daemon runs against the wrong repo (or dAImon itself)
 
-`working_dir` isn't set or points at the wrong place. Each daemon needs it in its
-gitignored `daemon.local.toml`; unset, it defaults to the dAImon install root.
+`working_dir` isn't set or points at the wrong place. Each daemon needs it in
+`~/.daimon/daemons/<slug>.toml`; unset, it defaults to the dAImon install root.
 Run `daimon init <slug>` from the target repo and accept the prompt, or type the
 target path when prompted. `daimon doctor` flags daemons whose `working_dir` is
 unset or missing. If you intentionally want daemons to operate on dAImon itself,
@@ -31,7 +31,7 @@ and `jq` — make sure both are installed (`make doctor`).
 ## Shortcut daemons can't find stories
 
 Set your API token (`export SHORTCUT_API_TOKEN=…` or `~/.config/shortcut-cli/config.json`)
-and your `owner`/`team` in `profiles/shortcut/profile.local.toml`. Daemons are
+and your `owner`/`team` in `~/.daimon/profiles/shortcut.toml`. Daemons are
 scoped to the owner; a blank owner means all stories are in scope.
 
 ## Scheduling doesn't fire

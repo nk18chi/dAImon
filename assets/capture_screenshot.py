@@ -45,7 +45,7 @@ def _sandbox() -> None:
     os.environ["HOME"] = "/home/you"
     root = Path(tempfile.mkdtemp(prefix="daimon-shot-"))
     ignore = shutil.ignore_patterns(
-        "__pycache__", "*.pyc", "daemon.local.toml", "profile.local.toml"
+        "__pycache__", "*.pyc", "daemon.local.toml", "profile.local.toml", "*.local"
     )
     shutil.copytree(REPO / "daemons", root / "daemons", ignore=ignore)
     shutil.copytree(REPO / "profiles", root / "profiles", ignore=ignore)

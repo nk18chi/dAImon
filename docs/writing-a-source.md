@@ -51,16 +51,17 @@ mutating operations — create, comment, label, transition — with the exact ca
 A read-only daemon never sees this, so keep read vs write cleanly split. See
 `profiles/shortcut/reference.write.md`.
 
-### 5. `profile.local.toml` (optional, gitignored)
+### 5. `profile.local.toml.example` (optional)
 
-Machine-local overrides of `[defaults]`, shared across every daemon on the source
-(e.g. your Shortcut `owner`). Commit a `profile.local.toml.example` to show the
-shape; the real file is gitignored.
+Each person's overrides of `[defaults]`, shared across every daemon on the source
+(e.g. your Shortcut `owner`), live outside the repo in
+`~/.daimon/profiles/<name>.toml`. Commit a `profile.local.toml.example` to
+show the shape; `daimon init` copies it there.
 
 ## How a daemon uses it
 
 ```toml
-# in daemons/<slug>/daemon.toml
+# in <slug>/daemon.toml
 sources = ["datadog", { name = "shortcut", write = true }]
 ```
 

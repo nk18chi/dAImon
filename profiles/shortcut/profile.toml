@@ -5,6 +5,8 @@ description = "Shortcut stories via the Shortcut REST API"
 [defaults]
 team = ""
 owner = ""
+# Whether stories the owner only requested (but doesn't own) are in scope too.
+include_requested = true
 triage_state = "To Do"
 in_progress_state = "In Development"
 done_state = "Done"
@@ -12,6 +14,8 @@ ready_label = "ai-ready"
 assist_label = "ai-assist"
 human_label = "ai-human"
 priority_label = "ai-priority"
+# Member ids whose requested stories go first, ahead of priority_label, in order.
+priority_requesters = []
 skip_label = "no-ai"
 epic_id = ""
 # Value of the workspace's "Product Area" custom field to stamp on every story a
@@ -21,3 +25,29 @@ epic_id = ""
 # label in Shortcut exactly — an unrecognized value fails the create.
 product_area = ""
 exclude_epics = []
+# Objectives whose stories (in every epic, current and future) no daemon touches.
+exclude_objectives = []
+# Epics opted back in although their objective is excluded, e.g. a tech-debt
+# epic inside a migration objective. exclude_epics and exclude_labels still win.
+include_epics = []
+# Labels whose stories no daemon touches, wherever they live. Shortcut matches a
+# label term against each word of a label name, so "milestone" also covers
+# "milestone:x:y". Names can't contain spaces (lists reach the gate space-joined).
+exclude_labels = []
+# Optional dropdown custom field that mirrors the assessment labels (e.g. a team's
+# "AI Status"). Blank disables it. Each status_* names the value written at that
+# step; blank skips that write. A story whose field holds any other value belongs
+# to another process and is out of scope.
+status_field = ""
+status_ready = ""
+status_assist = ""
+status_human = ""
+status_skip = ""
+status_claimed = ""
+status_done = ""
+# true: the status field replaces the ready/assist/human/skip labels as the
+# marker (searched and written instead of them). false: it only mirrors them.
+status_is_source = false
+# Optional dropdown custom field to rank by (e.g. "Priority"); its first value
+# ranks highest and unset ranks last. Blank skips it.
+priority_field = ""

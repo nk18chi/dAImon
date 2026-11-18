@@ -358,7 +358,7 @@ class DaemonCtl(App):
         def done(new: str | None) -> None:
             if not new:
                 return
-            if (cfg.daemons_dir() / new).exists():
+            if new in cfg.discover() or cfg.daemon_dir(new).exists():
                 self.notify(f"'{new}' already exists", severity="error")
                 return
             ops.duplicate(cfg, slug, new)

@@ -7,7 +7,7 @@ fail=0
 check_sh_files() {
   while IFS= read -r f; do
     if "$@" "$f"; then echo "  ok  $f"; else echo "  FAIL $f"; fail=1; fi
-  done < <(find "$ROOT/lib" "$ROOT/backends" "$ROOT/daemons" "$ROOT/profiles" -name '*.sh')
+  done < <(find "$ROOT/lib" "$ROOT/backends" "$ROOT/catalog" "$ROOT/profiles" -name '*.sh')
 }
 
 echo "== bash syntax =="

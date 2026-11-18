@@ -1,0 +1,32 @@
+[daemon]
+backend = "claude"
+sources = [{ name = "shortcut", write = true }]
+model = "sonnet"
+schedule = { interval = 1800 }
+command = "/story-reviewer"
+stuck_after = 1800
+required_inputs = ["triage_state", "in_progress_state", "ready_label", "skip_label", "assist_label", "human_label"]
+mcp = ["codex"]
+
+[inputs]
+repos = []
+bot_marker = "🤖"
+# How much detail the posted assessment carries: full (sectioned template) or compact.
+verbosity = "full"
+# Extra intake beyond the triage state: un-assessed stories carrying any of these
+# labels (in any state but in-progress) are reviewed too. Label names must not
+# contain spaces. e.g. ["cleanup", "follow-up"].
+intake_labels = []
+# Stories carrying any of these labels are kept out of the label intake above,
+# e.g. ["blocker"] so critical-path work stays with a human.
+intake_exclude_labels = []
+# Also review every story that hasn't started yet (backlog and unstarted
+# states), not only the triage state.
+intake_unstarted = false
+# Assess at most this many stories per run, so a wide intake drains gradually
+# instead of in one enormous run.
+max_per_run = 5
+# State to move a story to when it is provably obsolete, delivered or a
+# duplicate (e.g. "Icebox"). Blank: never move it, only flag it as a close
+# candidate for the owner.
+close_state = ""

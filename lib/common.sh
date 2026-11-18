@@ -58,12 +58,14 @@ load_json_object() {
 STUCK_CIRCUIT_K=2
 
 # notify <message> -> best-effort out-of-band alert. Runs the optional executable
-# at ~/.config/daimon/notify (Slack webhook, osascript, ntfy — whatever you put
-# there) with the message as $1. A silent no-op when absent, and never fails the
+# at ~/.daimon/notify (Slack webhook, osascript, ntfy — whatever you put there)
+# with the message as $1. A silent no-op when absent, and never fails the
 # caller: a broken notifier must not take a daemon down with it. Used where a
-# human would otherwise never learn something stopped.
+# human would otherwise never learn something stopped. The legacy
+# ~/.config/daimon/notify is still found until the personal-dir migration runs.
 notify() {
-  local hook="${DAIMON_NOTIFY_HOOK:-$HOME/.config/daimon/notify}"
+  local hook="${DAIMON_NOTIFY_HOOK:-$HOME/.daimon/notify}"
+  [ -x "$hook" ] || hook="$HOME/.config/daimon/notify"
   [ -x "$hook" ] || return 0
   "$hook" "$1" >/dev/null 2>&1 || true
 }
@@ -96,9 +98,14 @@ load_seen_state() {
   # gate that iterates the object instead gets its two arrays as elements, so
   # every `.number` lookup silently misses and nothing is ever deduped. The
   # framework does not dictate the file's shape, so it normalises here instead.
+  # Only an object made of lists is flattened. An object keyed by item (e.g.
+  # pr-manager's {"prs": {"<n>": {...}}}) comes back unchanged, because its gate
+  # looks items up by key.
   jq -c '
     if type == "array" then .
-    elif type == "object" then ([ .[] | select(type == "array") ] | add // [])
+    elif type == "object" and any(.[]; type == "array") then
+      ([ .[] | select(type == "array") ] | add // [])
+    elif type == "object" then .
     else [] end
   ' "$f" 2>/dev/null || printf '[]'
 }

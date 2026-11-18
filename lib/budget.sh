@@ -5,6 +5,9 @@ _budget_file() { echo "$(runtime_dir)/hourly-usage.json"; }
 
 budget_record() {  # slug — count one launch in the current hour
   local slug="$1" f; f="$(_budget_file)"
+  # An exempt daemon neither defers on the cap nor consumes it — otherwise a
+  # high-frequency exempt poller would fill the shared pool and starve the rest.
+  if _budget_exempt "$slug"; then return; fi
   mkdir -p "$(dirname "$f")"
   python3 - "$f" "$slug" <<'PY'
 import json, sys, datetime

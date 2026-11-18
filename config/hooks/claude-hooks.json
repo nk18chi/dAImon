@@ -1,9 +1,9 @@
 {
   "Stop": [
-    { "hooks": [ { "type": "command", "command": "[ -n \"$DAIMON_SENTINEL\" ] && touch \"$DAIMON_SENTINEL\"; [ -n \"$DAIMON_WAIT\" ] && rm -f \"$DAIMON_WAIT\"; true" } ] }
+    { "hooks": [ { "type": "command", "command": "[ -n \"$DAIMON_SENTINEL\" ] && { [ -z \"$DAIMON_AGENT_SESSION\" ] || grep -qF \"$DAIMON_AGENT_SESSION\"; } && touch \"$DAIMON_SENTINEL\"; [ -n \"$DAIMON_WAIT\" ] && rm -f \"$DAIMON_WAIT\"; true" } ] }
   ],
   "StopFailure": [
-    { "hooks": [ { "type": "command", "command": "[ -n \"$DAIMON_SENTINEL\" ] && touch \"$DAIMON_SENTINEL\"; [ -n \"$DAIMON_WAIT\" ] && rm -f \"$DAIMON_WAIT\"; true" } ] }
+    { "hooks": [ { "type": "command", "command": "[ -n \"$DAIMON_SENTINEL\" ] && { [ -z \"$DAIMON_AGENT_SESSION\" ] || grep -qF \"$DAIMON_AGENT_SESSION\"; } && touch \"$DAIMON_SENTINEL\"; [ -n \"$DAIMON_WAIT\" ] && rm -f \"$DAIMON_WAIT\"; true" } ] }
   ],
   "PreToolUse": [
     { "hooks": [ { "type": "command", "command": "[ -n \"$DAIMON_HEARTBEAT\" ] && touch \"$DAIMON_HEARTBEAT\"; [ -n \"$DAIMON_WAIT\" ] && rm -f \"$DAIMON_WAIT\"; true" } ] }

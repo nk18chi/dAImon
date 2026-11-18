@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Safety-net sweep, run on a schedule. Reaps orphaned agent sessions (launcher
 # died but tmux survived), kills leaked MCP node servers reparented to pid 1, and
-# enforces log/transcript retention.
+# enforces log/transcript retention, then reports daemon status ([status].command).
 set -uo pipefail
 
 DAIMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DAIMON_LIB_DIR/common.sh"
 source "$DAIMON_LIB_DIR/logging.sh"
 source "$DAIMON_LIB_DIR/reap.sh"
+source "$DAIMON_LIB_DIR/agent_status.sh"
 ensure_state_dirs
 WLOG="$(logs_dir)/watchdog.log"
 
@@ -41,6 +42,16 @@ for sess in $(tmux ls -F '#{session_name}' 2>/dev/null | grep -E "^${DAIMON_NS}-
   else
     age=$(( stuck + 1 ))
   fi
+  # A done sentinel the launcher hasn't consumed within a minute means the
+  # launcher is gone (e.g. its launchd job was unloaded mid-run): the agent has
+  # finished, so tear the idle session down now instead of waiting stuck_after.
+  done_f="$(sentinel_file "$sess")"
+  if [ -f "$done_f" ] && [ $(( $(now_epoch) - $(stat -f %m "$done_f" 2>/dev/null || now_epoch) )) -ge 60 ]; then
+    wlog reap "finished, unsupervised session=$sess slug=$slug"
+    reap_session "$sess"
+    rm -f "$hb" "$done_f" "$(wait_file "$sess")"
+    continue
+  fi
   if [ "$age" -ge "$stuck" ]; then
     wlog reap "stuck/orphan session=$sess slug=$slug age=${age}s"
     reap_session "$sess"
@@ -60,3 +71,6 @@ done
 # 3. Retention.
 prune_old_transcripts
 for f in "$(logs_dir)"/*.log; do rotate_if_large "$f"; done
+
+# 4. Status report (optional [status].command), after the sweep reaped what it could.
+report_agent_status

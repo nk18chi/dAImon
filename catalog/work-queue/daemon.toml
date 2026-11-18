@@ -1,0 +1,18 @@
+[daemon]
+backend = "claude"
+sources = [{ name = "shortcut", write = true }]
+schedule = { minutes = [8, 38] }
+command = "/work-queue"
+stuck_after = 2700
+# After each run, remove daimon/* worktrees whose work is committed and pushed.
+clean_worktrees = "daimon/"
+required_inputs = ["ready_label", "skip_label", "in_progress_state"]
+
+[inputs]
+repos = []
+base = "main"
+max_open_prs = 2
+stories_per_run = 1
+# Open PRs as drafts (pr-manager promotes them once green). Set false when the
+# repo's reviewer auto-assignment only fires on ready-for-review PRs.
+open_as_draft = true

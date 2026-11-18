@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import config  # noqa: E402
 
-DAEMONS = Path(__file__).resolve().parent.parent / "daemons"
+DAEMONS = Path(__file__).resolve().parent.parent / "catalog"
 
 PLACEHOLDER = re.compile(r"\{\{inputs\.([a-zA-Z0-9_]+)\}\}")
 

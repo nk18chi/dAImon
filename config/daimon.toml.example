@@ -1,4 +1,4 @@
-# dAImon global config. Copy to ~/.config/daimon/daimon.toml (or set $DAIMON_CONFIG).
+# dAImon global config. Copy to ~/.daimon/daimon.toml (or set $DAIMON_CONFIG).
 # Field reference: docs/configuration.md. Validate with `daimon config validate`.
 
 [core]
@@ -26,9 +26,39 @@ severe_critical = ["reply-to-comments"]
 [budget]
 hourly_cap = 12
 defer_at_pct = 80
-# Daemons whose launches never count against or defer on the cap — for
-# cheap, short-lived high-frequency pollers (e.g. "slack-channel-watch").
+# Daemons whose launches never count against or defer on the cap — for cheap,
+# short-lived high-frequency pollers (e.g. "slack-channel-watch") and for
+# daemons that must always be available (e.g. "review-prs").
 exempt = []
 
+[roles]
+# How a daemon with a `role` asks whether to run on this machine ({role},
+# {seconds} filled in; exit 0 = run here, 1 = another machine does). Empty:
+# no daemon may set `role`. See docs/configuration.md.
+command = ""
+
+# [status]
+# Receives this machine's daemon status as JSON on stdin after every watchdog
+# sweep and agent run ({seconds} = how long the report should be trusted).
+# Best-effort; empty = no report. See docs/configuration.md.
+# command = "my-coordinator status --ttl {seconds}"
+
+# [update]
+# Keep this install current: hourly, fast-forward to the upstream's latest
+# commit once its CI passes, then `daimon install` + `daimon sync`. Never a
+# checkout with local changes. Opt one machine out: touch ~/.daimon/no-auto-update
+# auto = true
+
+# [packs]
+# Folders outside this repo that add daemons, team overrides, profile defaults
+# and slack-commands runbooks, e.g. a private team repo. See docs/packs.md.
+# paths = ["~/work/daimon-team"]
+
 [daemons]
+# The daemons this machine has, from `daimon catalog` (dAImon's catalog/ plus
+# each pack's daemons/). `daimon add <slug>` / `daimon remove <slug>` edit it;
+# installing schedules nothing (register in `daimon tui` → r). Your own daemons
+# in daemons/ are always active and need no entry here.
+installed = []
+# Installed daemons to skip without uninstalling them.
 disabled = []

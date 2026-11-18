@@ -1,0 +1,9 @@
+# Copy to ~/.daimon/daemons/pr-manager.toml (daimon init does it)
+# and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose PRs this daemon shepherds
+
+[inputs]
+# GitHub logins requested as reviewers on managed PRs. Blank relies on CODEOWNERS;
+# with neither, a PR has no approver and never merges.
+reviewers = ["your-github-login"]

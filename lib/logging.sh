@@ -8,9 +8,11 @@ log_event() {  # daemon event message... -> one structured line on the daemon's 
   # and the TUI render "next run" from datetime.now(), and launchd fires clock
   # schedules on local time too. A UTC log was the only thing needing conversion
   # before you could line it up with the schedule that produced it.
-  local ts; ts="$(date +%Y-%m-%dT%H:%M:%S%z)"
+  local ts msg; ts="$(date +%Y-%m-%dT%H:%M:%S%z)"
+  # One line per event: fold newlines and swap the quote that delimits msg.
+  msg="$(printf '%s' "$*" | tr '\n\r"' "  '")"
   printf '%s level=info daemon=%s event=%s msg="%s"\n' \
-    "$ts" "$daemon" "$event" "$*"
+    "$ts" "$daemon" "$event" "$msg"
 }
 
 rotate_if_large() {  # logfile

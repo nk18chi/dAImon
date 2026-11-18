@@ -63,7 +63,7 @@ def kill_run(cfg, slug: str) -> None:
 def duplicate(cfg, src: str, new: str) -> None:
     # exclude daemon.local.toml: the clone targets a different repo, so working_dir starts fresh
     shutil.copytree(
-        cfg.daemons_dir() / src,
+        cfg.daemon_dir(src),
         cfg.daemons_dir() / new,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "daemon.local.toml"),
     )

@@ -43,7 +43,22 @@ source "$DAIMON_LIB_DIR/budget.sh"
 budget_check "$SLUG"
 if [ "${BUDGET_OVER:-0}" -eq 1 ]; then log_event "$SLUG" skip "$BUDGET_REASON" >> "$OPLOG"; exit 0; fi
 
-DISCOVER="$DAIMON_INSTALL_ROOT/daemons/$SLUG/discover.sh"
+# A daemon with a `role` runs on one machine at a time (e.g. one Datadog
+# reviewer per team). After the inbox, so an explicitly queued command always
+# runs; after the budget, so a machine over budget stops asking and lets go.
+source "$DAIMON_LIB_DIR/role.sh"
+role_check "$SLUG"
+if [ "$ROLE_SKIP" -eq 1 ]; then
+  log_event "$SLUG" "$ROLE_EVENT" "$ROLE_REASON" >> "$OPLOG"
+  [ "$ROLE_EVENT" = config_error ] && exit 1
+  exit 0
+fi
+
+# daemons/<slug>, daemons/<slug>.local, or a pack's daemons/ (config.py decides).
+DDIR="$(cfg daemon-dir "$SLUG")"
+DISCOVER="$DDIR/discover.sh"
+# A gate outside the install root (a pack's) finds dAImon's libs through these.
+export DAIMON_INSTALL_ROOT DAIMON_DAEMON_DIR="$DDIR"
 if [ -f "$DISCOVER" ]; then
   set -a; eval "$(cfg env "$SLUG")"; set +a
 
@@ -62,17 +77,34 @@ if [ -f "$DISCOVER" ]; then
   #   exit 1 with clean stderr -> nothing to do, skip until next run
   #   any stderr, or exit >=2  -> the gate itself errored; surface it loudly
   derr="$(mktemp "${TMPDIR:-/tmp}/daimon-discover.XXXXXX")"
+  # A gate may leave a one-line summary of what it found (ids, counts) in
+  # $DAIMON_GATE_NOTE; it is appended to the decision logged below.
+  DAIMON_GATE_NOTE="$(mktemp "${TMPDIR:-/tmp}/daimon-note.XXXXXX")"; export DAIMON_GATE_NOTE
+  # A gate may ask to resume an earlier agent session: line 1 the session id,
+  # line 2 the command to type into it.
+  DAIMON_GATE_RESUME="$(mktemp "${TMPDIR:-/tmp}/daimon-resume.XXXXXX")"; export DAIMON_GATE_RESUME
   bash "$DISCOVER" 2>"$derr"; rc=$?
   errtext="$(cat "$derr")"; rm -f "$derr"
+  note="$(head -c 600 "$DAIMON_GATE_NOTE" 2>/dev/null)"; rm -f "$DAIMON_GATE_NOTE"
+  note="${note:+: $note}"
+  resume_id="$(sed -n 1p "$DAIMON_GATE_RESUME" 2>/dev/null)"
+  resume_cmd="$(sed -n 2p "$DAIMON_GATE_RESUME" 2>/dev/null)"; rm -f "$DAIMON_GATE_RESUME"
+  case "$resume_id" in
+    *[!0-9a-f-]*|"") resume_id="" ;;  # only a plain session uuid is accepted
+  esac
   if [ -n "$errtext" ] || [ "$rc" -ge 2 ]; then
     log_event "$SLUG" discover_error "discover.sh failed (exit $rc): ${errtext:-no stderr}" >> "$OPLOG"
     exit 1
   fi
   if [ "$rc" -eq 0 ]; then
-    log_event "$SLUG" launch_decision "discovery found work" >> "$OPLOG"
+    log_event "$SLUG" launch_decision "discovery found work$note" >> "$OPLOG"
+    if [ -n "$resume_id" ] && [ -n "$resume_cmd" ]; then
+      DAIMON_RESUME_SESSION="$resume_id" DAIMON_RESUME_COMMAND="$resume_cmd" \
+        exec bash "$DAIMON_LIB_DIR/launch.sh" "$SLUG"
+    fi
     exec bash "$DAIMON_LIB_DIR/launch.sh" "$SLUG"
   fi
-  log_event "$SLUG" skip "discovery found nothing; $(next_run_display "$SLUG")" >> "$OPLOG"
+  log_event "$SLUG" skip "discovery found nothing$note; $(next_run_display "$SLUG")" >> "$OPLOG"
   exit 0
 fi
 

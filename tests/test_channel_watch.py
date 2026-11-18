@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def _load():
     spec = importlib.util.spec_from_file_location(
-        "channel_watch_forward", ROOT / "daemons" / "slack-channel-watch" / "forward.py"
+        "channel_watch_forward", ROOT / "catalog" / "slack-channel-watch" / "forward.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

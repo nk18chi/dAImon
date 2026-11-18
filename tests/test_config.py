@@ -48,7 +48,7 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "alpha" / "daemon.toml",
+            root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -60,11 +60,11 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "alpha" / "skill" / "SKILL.md",
+            root / "catalog" / "alpha" / "skill" / "SKILL.md",
             "---\nname: alpha\ndescription: a\n---\nRepo {{inputs.repo}} filter {{inputs.filter}}.\n",
         )
         write(
-            root / "daemons" / "beta" / "daemon.toml",
+            root / "catalog" / "beta" / "daemon.toml",
             """
             [daemon]
             backend = "claude"
@@ -74,11 +74,11 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "beta" / "skill" / "SKILL.md",
+            root / "catalog" / "beta" / "skill" / "SKILL.md",
             "---\nname: beta\ndescription: b\n---\nHi.\n",
         )
         write(
-            root / "daemons" / "gamma" / "daemon.toml",
+            root / "catalog" / "gamma" / "daemon.toml",
             """
             [daemon]
             schedule = { daily = "13:02", tz = "UTC" }
@@ -86,11 +86,11 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "gamma" / "skill" / "SKILL.md",
+            root / "catalog" / "gamma" / "skill" / "SKILL.md",
             "---\nname: gamma\ndescription: c\n---\nHi.\n",
         )
         write(
-            root / "daemons" / "delta" / "daemon.toml",
+            root / "catalog" / "delta" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 900 }
@@ -98,7 +98,7 @@ class ConfigTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "delta" / "skill" / "SKILL.md",
+            root / "catalog" / "delta" / "skill" / "SKILL.md",
             "---\nname: delta\ndescription: d\n---\nHi.\n",
         )
         os.environ["DAIMON_CONFIG"] = str(root / "config" / "daimon.toml")
@@ -110,6 +110,56 @@ class ConfigTest(unittest.TestCase):
 
     def test_discovery_excludes_disabled(self):
         self.assertEqual(set(self.cfg.discover()), {"alpha", "beta", "gamma"})
+
+    def _local_daemon(self, slug="secret"):
+        d = self.root / "daemons" / f"{slug}.local"
+        write(
+            d / "daemon.toml",
+            f"""
+            [daemon]
+            schedule = {{ interval = 600 }}
+            command = "/{slug}"
+            [inputs]
+            who = "default"
+        """,
+        )
+        write(
+            d / "daemon.local.toml",
+            """
+            [inputs]
+            who = "local"
+        """,
+        )
+        write(d / "skill" / "SKILL.md", f"---\nname: {slug}\ndescription: x\n---\nbody\n")
+        return d
+
+    def test_local_suffix_daemon_loads_under_plain_slug(self):
+        d = self._local_daemon()
+        cfg = config.Config.load()
+        self.assertIn("secret", cfg.discover())
+        self.assertNotIn("secret.local", cfg.discover())
+        self.assertEqual(cfg.daemon_dir("secret").resolve(), d.resolve())
+        self.assertEqual(cfg.daemon("secret")["inputs"]["who"], "local")
+        self.assertIn("body", config.render_skill(cfg, "secret"))
+        self.assertFalse([e for e in config.validate(cfg) if e.startswith("secret")])
+
+    def test_private_copy_of_a_catalog_slug_takes_precedence(self):
+        d = self._local_daemon("alpha")
+        cfg = config.Config.load()
+        self.assertEqual(cfg.daemon_dir("alpha").resolve(), d.resolve())
+        self.assertFalse([e for e in config.validate(cfg) if "defined twice" in e])
+
+    def test_two_ejected_copies_of_a_slug_are_a_validation_error(self):
+        self._local_daemon("alpha")
+        plain = self.root / "daemons" / "alpha"
+        write(plain / "daemon.toml", '[daemon]\nschedule = { interval = 60 }\ncommand = "/alpha"\n')
+        errors = config.validate(config.Config.load())
+        self.assertTrue(any("alpha: defined twice" in e for e in errors), errors)
+
+    def test_daemon_dir_prefers_plain_folder(self):
+        self.assertEqual(
+            self.cfg.daemon_dir("alpha").resolve(), (self.root / "catalog" / "alpha").resolve()
+        )
 
     def test_defaults_inherited(self):
         self.assertEqual(self.cfg.daemon("beta")["danger"], True)
@@ -125,7 +175,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_working_dir_placeholder_is_not_configured(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.local.toml",
+            self.root / "catalog" / "alpha" / "daemon.local.toml",
             """
             [daemon]
             working_dir = "~/code/your-repo"
@@ -136,7 +186,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_explicit_install_root_working_dir_is_configured(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.local.toml",
+            self.root / "catalog" / "alpha" / "daemon.local.toml",
             f"""
             [daemon]
             working_dir = "{self.root}"
@@ -158,7 +208,7 @@ class ConfigTest(unittest.TestCase):
             """,
         )
         write(
-            self.root / "daemons" / "epsilon" / "daemon.toml",
+            self.root / "catalog" / "epsilon" / "daemon.toml",
             """
             [daemon]
             sources = ["sc"]
@@ -170,7 +220,7 @@ class ConfigTest(unittest.TestCase):
             """,
         )
         write(
-            self.root / "daemons" / "epsilon" / "skill" / "SKILL.md",
+            self.root / "catalog" / "epsilon" / "skill" / "SKILL.md",
             "---\nname: epsilon\ndescription: e\n---\nHi.\n",
         )
         return config.Config.load()
@@ -196,7 +246,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_backends_appends_optional_fallback(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             backend = "claude"
@@ -226,7 +276,7 @@ class ConfigTest(unittest.TestCase):
         # Shortcut state "In Progress") must be shell-quoted or the eval breaks
         # and later DAIMON_INPUT_* vars never get exported.
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -259,7 +309,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_daemon_env_bundles_fallback_model(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             fallback_backend = "codex"
@@ -286,7 +336,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_mcp_opt_in_exports_and_renders_config(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -384,7 +434,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_inputs_flags_empty_required(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -403,7 +453,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_inputs_passes_when_all_present(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -437,10 +487,20 @@ class ConfigTest(unittest.TestCase):
         out = config.render_skill(self.cfg, "alpha")
         self.assertIn("LEARNING PROTOCOL BODY", out)
 
+    def test_render_skill_appends_unattended_rules(self):
+        write(self.root / "references" / "unattended.md", "UNATTENDED BODY\n")
+        out = config.render_skill(self.cfg, "alpha")
+        self.assertIn("UNATTENDED BODY", out)
+
+    def test_render_skill_appends_result_logging(self):
+        write(self.root / "references" / "results.md", "RESULTS BODY\n")
+        out = config.render_skill(self.cfg, "alpha")
+        self.assertIn("RESULTS BODY", out)
+
     def test_render_skill_learning_opt_out(self):
         write(self.root / "references" / "learning.md", "LEARNING PROTOCOL BODY\n")
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -456,7 +516,7 @@ class ConfigTest(unittest.TestCase):
     def test_codex_review_ref_appended_when_mcp_enabled(self):
         write(self.root / "references" / "codex-review.md", "CODEX SECOND OPINION BODY\n")
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -477,7 +537,7 @@ class ConfigTest(unittest.TestCase):
     def test_conventions_appended_for_bot_marker_daemons(self):
         write(self.root / "references" / "skill-conventions.md", "PREFIX {{inputs.bot_marker}}\n")
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -503,9 +563,37 @@ class ConfigTest(unittest.TestCase):
     def test_validate_clean(self):
         self.assertEqual(config.validate(self.cfg), [])
 
+    def _with_role(self, slug: str, extra: str, command: str = "hold {role} --for {seconds}"):
+        local = self.root / "catalog" / slug / "daemon.local.toml"
+        write(local, f"[daemon]\n{extra}\n")
+        conf = self.root / "config" / "daimon.toml"
+        base = conf.read_text().split("[roles]")[0]
+        conf.write_text(base + f'[roles]\ncommand = "{command}"\n')
+        return config.Config.load()
+
+    def test_role_command_unset_is_empty(self):
+        self.assertEqual(config.role_command(self.cfg, "alpha"), "")
+
+    def test_role_command_holds_for_twice_the_interval_plus_a_minute(self):
+        cfg = self._with_role("alpha", 'role = "datadog-errors"')
+        self.assertEqual(config.role_command(cfg, "alpha"), "hold datadog-errors --for 2460")
+        self.assertEqual(config.validate(cfg), [])
+
+    def test_role_hold_overrides_and_is_required_off_interval(self):
+        cfg = self._with_role("beta", 'role = "standup"')
+        self.assertTrue(any("role_hold is required" in e for e in config.validate(cfg)))
+        cfg = self._with_role("beta", 'role = "standup"\nrole_hold = 7200')
+        self.assertEqual(config.role_command(cfg, "beta"), "hold standup --for 7200")
+
+    def test_role_without_command_or_with_a_bad_name_is_invalid(self):
+        cfg = self._with_role("alpha", 'role = "datadog"', command="")
+        self.assertTrue(any("[roles].command is empty" in e for e in config.validate(cfg)))
+        cfg = self._with_role("alpha", 'role = "Data dog; rm -rf ~"')
+        self.assertTrue(any("role must match" in e for e in config.validate(cfg)))
+
     def test_validate_catches_bad_backend(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             backend = "gpt"
@@ -518,7 +606,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_bad_fallback_backend(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             fallback_backend = "gpt"
@@ -531,7 +619,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_fallback_matching_primary(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             backend = "claude"
@@ -545,7 +633,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_empty_required_input(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -562,7 +650,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_missing_command(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -573,7 +661,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_codex_backend_validates_and_resolves_model(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             backend = "codex"
@@ -591,7 +679,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_unknown_mcp_server(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }
@@ -604,7 +692,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_validate_catches_mcp_without_danger(self):
         write(
-            self.root / "daemons" / "alpha" / "daemon.toml",
+            self.root / "catalog" / "alpha" / "daemon.toml",
             """
             [daemon]
             schedule = { interval = 1200 }

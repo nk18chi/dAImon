@@ -1,8 +1,0 @@
-# Copy to daemon.local.toml (gitignored) and set values for THIS machine.
-# Only override what differs from daemon.toml. working_dir is the one you must set.
-[daemon]
-working_dir = "~/code/your-repo"   # the repo whose PRs this daemon reviews
-
-# [inputs]
-# review_mode = "approve"          # approve | request_changes | comment
-# verbosity = "full"               # full | compact

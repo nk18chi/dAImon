@@ -1,4 +1,4 @@
-"""Generate per-daemon README.md files (and a daemons/ index) from each daemon's
+"""Generate per-daemon README.md files (and the catalog/ index) from each daemon's
 committed metadata — daemon.toml + skill/SKILL.md only, never machine-local files.
 
 Run `python -m daimon.gen_docs` (or `make docs`) to write them; `--check` verifies
@@ -108,7 +108,9 @@ def render_index(daemons: list[tuple[str, dict, dict]]) -> str:
         rows.append(f"| [{slug}]({slug}/) | {sched} | {fm.get('description', '')} |")
     body = [
         BANNER,
-        "# Daemons",
+        "# Catalog",
+        "dAImon's own daemons. Install one with `daimon add <slug>`: see "
+        "[../docs/catalog.md](../docs/catalog.md).",
         "\n".join(rows),
         "See [../docs/writing-a-daemon.md](../docs/writing-a-daemon.md) to add one.",
     ]
@@ -139,7 +141,7 @@ def _ignored(root: Path, dirs: list[Path]) -> set[Path]:
 
 
 def _targets(root: Path) -> list[tuple[Path, str]]:
-    dirs = sorted(p.parent for p in (root / "daemons").glob("*/daemon.toml"))
+    dirs = sorted(p.parent for p in (root / "catalog").glob("*/daemon.toml"))
     out = [(d / "README.md", render_daemon(d)) for d in dirs]
     ignored = _ignored(root, dirs)
     index = [
@@ -151,7 +153,7 @@ def _targets(root: Path) -> list[tuple[Path, str]]:
         for d in dirs
         if d.resolve() not in ignored
     ]
-    out.append((root / "daemons" / "README.md", render_index(index)))
+    out.append((root / "catalog" / "README.md", render_index(index)))
     return out
 
 

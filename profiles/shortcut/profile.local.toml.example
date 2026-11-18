@@ -1,5 +1,6 @@
-# Copy to profile.local.toml (gitignored). Shortcut settings shared by every
-# daemon that uses the shortcut source. The API token is NOT set here — export
+# Copy to ~/.daimon/profiles/shortcut.toml (daimon init does it).
+# Shortcut settings shared by every daemon that uses the shortcut source.
+# The API token is NOT set here — export
 # $SHORTCUT_API_TOKEN or store it in ~/.config/shortcut-cli/config.json.
 [defaults]
 team = "Your Team Name"

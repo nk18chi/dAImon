@@ -1,7 +1,8 @@
 # Configuration reference
 
-dAImon reads one global file — `~/.config/daimon/daimon.toml` (override with
-`$DAIMON_CONFIG`) — plus one `daemon.toml` per daemon folder under `daemons/`.
+dAImon reads one global file — `~/.daimon/daimon.toml` (override with
+`$DAIMON_CONFIG`) — plus one `daemon.toml` per daemon folder: in dAImon's
+`catalog/`, a pack's `daemons/`, or your own `daemons/` ([catalog](catalog.md)).
 Run `daimon config validate` after editing. Plists are generated from these by
 `daimon sync`; never hand-edit the generated plists.
 
@@ -48,14 +49,40 @@ Inherited by every daemon; a daemon's `[daemon]` block overrides any field.
 |-----|------|---------|
 | `hourly_cap` | int | Target launches per hour across all daemons. |
 | `defer_at_pct` | int | Work-style daemons defer new launches at/above this percent of the cap. |
+| `exempt` | string[] | Daemons that must always be available. They never defer on the cap, and their launches never count toward it. |
+
+### `[roles]`
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `command` | string | How a daemon with a `role` asks whether to run on this machine. `{role}` and `{seconds}` are filled in (shell-quoted); exit 0 = run here, 1 = another machine runs it (its first line of output is logged), anything else = the check failed, so the daemon skips (fails closed). See [Run a daemon on one machine only](#run-a-daemon-on-one-machine-only). |
+
+### `[status]`
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `command` | string | Optional. Receives this machine's daemon status as one JSON document on stdin after every watchdog sweep and when an agent run starts and ends. `{seconds}` is filled in (shell-quoted) with how long the report should be trusted (900). Best-effort: a failure is logged to `logs/agent-status.log` and never affects a run. Empty (default) = no report. See [Report agent status](#report-agent-status). |
+
+### `[update]`
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `auto` | bool | Default false. When true, `daimon sync` loads `com.<ns>.update`, which runs `daimon update` at login and hourly. An update only fast-forwards this checkout to its upstream, only to a commit whose CI check runs all passed, and never touches a checkout with local changes or switch branches. It then runs `daimon install` and `daimon sync`, which also fast-forwards clean packs and reloads only daemons that are already registered. Log: `logs/update.log`. To opt one machine out, `touch ~/.daimon/no-auto-update`. To update now, `daimon update`. |
+
+### `[packs]`
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `paths` | string[] | Folders (`~` expanded) that add daemons, team overrides, profile defaults and slack-commands runbooks, so a team can commit its setup in its own repo. See [packs](packs.md). |
 
 ### `[daemons]`
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `disabled` | string[] | Slugs of discovered daemons to skip (without deleting their folder). |
+| `installed` | string[] | The daemons this machine has, from `daimon catalog`. `daimon add` / `daimon remove` / `daimon init` edit it; installing registers nothing. Your own daemons in `daemons/` are active without an entry. Absent (an install from before the catalog): every catalog daemon counts as installed, and `daimon migrate` writes that set once. See [catalog](catalog.md). |
+| `disabled` | string[] | Installed (or your own) daemons to skip, without uninstalling or deleting them. |
 
-## Per-daemon file: `daemons/<slug>/daemon.toml`
+## Per-daemon file: `<slug>/daemon.toml`
 
 ### `[daemon]` — framework settings (override `[defaults]`)
 
@@ -71,6 +98,8 @@ Inherited by every daemon; a daemon's `[daemon]` block overrides any field.
 | `mcp` | string[] | MCP servers for this daemon's session (overrides `[defaults].mcp`). Known: `codex` — also attaches the `references/codex-review.md` second-opinion protocol to the skill. Requires `danger = true`. |
 | `tools` | string[] | Tool allowlist in Claude permission-rule syntax (e.g. `["Read", "Bash(git log:*)", "mcp__server__tool"]`). When set it **overrides `danger`**: the session runs `--permission-mode dontAsk` (anything unlisted is denied, never prompted) and loads **no** settings files, so neither the target repo's nor your own `~/.claude/settings.json` allow rules can widen it (nor do your other hooks or plugins run). dAImon's own hooks are passed with `--settings`, and the user-scope MCP servers the list names (`mcp__<server>__…`) are copied from `~/.claude.json` into a private `--mcp-config` file at launch. Name MCP tools one by one — a bare `mcp__server` rule would admit its write tools too. Claude-only: validation rejects `codex` as backend or fallback. `{{state_dir}}` in a rule expands to the absolute state dir, so `Edit(/{{state_dir}}/qa-log/x/**)` allows writes to that folder only (Edit rules cover Write; the extra leading `/` makes the `//` absolute-path form). Skills can use `{{state_dir}}` too. Use it for daemons triggered by untrusted input (e.g. `slack-ask`). |
 | `source` | string | Name of a [source profile](#source-profiles) (folder under `profiles/`) describing the work-item backend, e.g. `shortcut`. Optional; omit for daemons that only act on the repo (PR daemons). |
+| `role` | string | Run this daemon on one machine at a time across a team: on each run it asks `[roles].command` and skips unless this machine holds the role. Lowercase letters, digits and `-`. Usually set in `daemon.local.toml`. |
+| `role_hold` | int (sec) | How long one run's claim on the role lasts. Defaults to twice the interval plus a minute; required for `minutes`/`daily` schedules. |
 | `schedule` | table | One of: `{ interval = 1200 }` (seconds), `{ minutes = [8, 38] }` (minutes past each hour), or `{ daily = "13:02", tz = "UTC" }`. |
 
 ### `[inputs]` — task variables
@@ -95,20 +124,114 @@ default template.
 ## Local overrides (keep your config out of git)
 
 The committed `daemon.toml` and `profile.toml` files are shareable templates with
-placeholder values. Your real values go in gitignored `*.local.toml` siblings, so
-you can configure freely and still push the repo:
+placeholder values. Your real values live outside the repo, in `~/.daimon/`
+beside the global config (the folder holding `$DAIMON_CONFIG`, when that is set),
+so you can configure freely, update dAImon, and still push the repo:
 
-| Committed (template) | Local override (gitignored) |
-|----------------------|------------------------------|
-| `daemons/<slug>/daemon.toml` | `daemons/<slug>/daemon.local.toml` |
-| `profiles/<name>/profile.toml` | `profiles/<name>/profile.local.toml` |
-| `config/daimon.toml.example` | `~/.config/daimon/daimon.toml` (outside the repo) |
+| Committed (template) | Your settings (outside the repo) |
+|----------------------|----------------------------------|
+| `daemons/<slug>/daemon.toml` | `~/.daimon/daemons/<slug>.toml` (`[daemon]`, `[inputs]`) |
+| `profiles/<name>/profile.toml` | `~/.daimon/profiles/<name>.toml` (`[defaults]`) |
+| `config/daimon.toml.example` | `~/.daimon/daimon.toml` |
 
 Merge precedence (last wins): global `[defaults]` → profile `[defaults]` →
-`profile.local.toml` → `daemon.toml` → `daemon.local.toml`. The TUI config screen
-(`c`) writes to `daemon.local.toml`, so editing a daemon never touches a committed
-file. Set workspace-wide values (e.g. your Shortcut workspace/labels) once in
-`profiles/<name>/profile.local.toml`.
+a pack's `profiles/<name>.toml` → legacy `profile.local.toml` →
+`~/.daimon/profiles/<name>.toml` → `daemon.toml` → a pack's
+`overrides/<slug>.toml` → legacy `daemon.local.toml` →
+`~/.daimon/daemons/<slug>.toml` ([packs](packs.md)). The TUI config screen
+(`c`) writes to `~/.daimon/daemons/<slug>.toml`, so editing a daemon never
+touches the repo. Set workspace-wide values (e.g. your Shortcut workspace/labels)
+once in `~/.daimon/profiles/<name>.toml`.
+
+**Legacy files.** Older installs kept these settings in gitignored
+`daemons/<slug>/daemon.local.toml` and `profiles/<name>/profile.local.toml` files
+inside the repo (or a pack). When dAImon's daemons moved to `catalog/`, those
+files stayed in `daemons/<slug>/`. They are still read, under the new files, and
+`daimon migrate` moves them: the text is copied verbatim (comments kept), or merged
+key by key when the new file already exists (its values win; overridden legacy
+values are kept as comments), and the old file is reduced to a one-line
+`# moved to … by daimon migrate` comment. A `daemons/<slug>/` folder left with
+nothing but such stubs (and caches) is then removed. It is idempotent, and `daimon install`
+(so every self-update) and `daimon init` run it for you. The tracked
+`*.local.toml.example` files stay where they are: `daimon init` copies them into
+`~/.daimon/`.
+
+**`~/.config/daimon`.** Until this release the personal dir was
+`~/.config/daimon`. `daimon migrate` (so `daimon install`, every self-update, and
+`daimon init`) moves it to `~/.daimon`: every file is copied verbatim with its
+mode, `daimon.toml` last, then removed from the old folder, which keeps only a
+one-line `MOVED` pointer. Paths in the moved `.toml` files that point into
+`~/.config/daimon` are re-pointed. Until the move, dAImon keeps reading
+`~/.config/daimon/daimon.toml` whenever `~/.daimon/daimon.toml` does not exist, so
+a scheduled job that fires between an update's `git merge` and its install runs as
+before. Anything already in `~/.daimon` that isn't part of this layout (state
+files from an older dAImon) is moved aside to `~/.daimon/legacy-<YYYYMMDD>/`, not
+deleted; a dAImon checkout at `~/.daimon/app` (where a team pack's setup may clone
+it) stays where it is. If both folders hold a `daimon.toml`, `~/.daimon` wins and the old folder
+is left alone, with a warning. With `$DAIMON_CONFIG` set nothing moves.
+
+## Run a daemon on one machine only
+
+Some daemons should run once per team, not once per teammate: a Datadog error
+reviewer run on three laptops files every story three times. Give such a daemon
+a `role`, and point `[roles].command` at whatever coordinates your machines:
+
+```toml
+# ~/.daimon/daimon.toml
+[roles]
+command = "my-coordinator hold {role} --for {seconds}"
+
+# ~/.daimon/daemons/datadog-log-reviewer.toml
+[daemon]
+role = "datadog-errors"
+```
+
+Each run asks the command right after the throttle, inbox and budget checks.
+The command answers for this machine: exit 0 runs the daemon, exit 1 skips it
+because another machine holds the role. A machine that stops asking (the daemon
+is disabled, throttled or over budget) should lose the role once `{seconds}`
+pass, so the coordinator can hand it to another machine. An explicitly queued
+inbox command always runs, role or not.
+
+dAImon ships no coordinator. Anything that hands out leases works: a lock in a
+shared key-value store, or an internal service your team already runs.
+
+## Report agent status
+
+dAImon has no long-running process, so nothing outside it can ask which daemons
+are up. Set `[status].command` and dAImon tells it instead:
+
+```toml
+# ~/.daimon/daimon.toml
+[status]
+command = "my-coordinator status --ttl {seconds}"
+```
+
+The command runs with `bash -c` at the end of every watchdog sweep (every 5
+minutes) and when an agent run starts and ends, and gets one JSON document on
+stdin:
+
+```json
+{"agents":[
+  {"name":"review-prs","state":"working"},
+  {"name":"datadog-log-reviewer","state":"idle","role":"datadog-errors"},
+  {"name":"story-reviewer","state":"blocked","note":"throttled"}
+]}
+```
+
+- One entry per enabled daemon that is loaded in launchd; unloaded daemons are
+  left out. At most 32 entries.
+- `state`: `working` while the daemon has an agent session, `blocked` (note
+  `throttled`) when the throttle is at `halt` and the daemon is not exempt,
+  otherwise `idle`.
+- `role` appears only for a daemon with a `role`; `note` only when there is one
+  (at most 40 characters).
+- `{seconds}` (900) is how long a report should be trusted: a receiver that
+  hears nothing for that long should treat the machine as gone.
+
+A report is best-effort: a failing command is logged (with its exit code) to
+`logs/agent-status.log`, one that hangs is abandoned after 30 seconds, and
+neither ever blocks or fails a run. dAImon ships no receiver.
 
 ## Source profiles
 

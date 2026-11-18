@@ -33,8 +33,10 @@ setup() {
   [ "$(printf '%s' "$output" | jq -r '[.[].number] | sort | join(",")')" = "1,2" ]
 }
 
-@test "load_seen_state: object with no arrays -> []" {
-  printf '{"note":"nothing here"}' > "$BATS_TEST_TMPDIR/s.json"
+# pr-manager's gate looks PRs up by key in {"prs": {"<n>": {...}}}, so an
+# object with no lists must come back as written, not emptied.
+@test "load_seen_state: object keyed by item comes back unchanged" {
+  printf '{"prs":{"7":{"feedback_seen":"2026-01-01T00:00:00Z"}}}' > "$BATS_TEST_TMPDIR/s.json"
   run load_seen_state "$BATS_TEST_TMPDIR/s.json"
-  [ "$output" = "[]" ]
+  [ "$(printf '%s' "$output" | jq -r '.prs["7"].feedback_seen')" = "2026-01-01T00:00:00Z" ]
 }

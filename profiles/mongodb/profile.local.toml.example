@@ -7,5 +7,5 @@ atlas_project_id = "000000000000000000000000"
 cluster_name = "Cluster0"
 
 # Credentials are NOT stored here. The gate resolves an Atlas service account from
-# $ATLAS_CLIENT_ID/$ATLAS_CLIENT_SECRET, then ~/.config/daimon/atlas.env, then the
+# $ATLAS_CLIENT_ID/$ATLAS_CLIENT_SECRET, then ~/.daimon/atlas.env, then the
 # MongoDB MCP server's own configuration. See profiles/mongodb/lib.sh.

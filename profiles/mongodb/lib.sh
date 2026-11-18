@@ -18,7 +18,8 @@ ATLAS_API_VERSION="application/vnd.atlas.2025-03-12+json"
 # source is under $HOME by necessity: launchd forwards only PATH, HOME and
 # SSH_AUTH_SOCK to a scheduled run, so a key exported in .zshrc never arrives.
 #   1. $ATLAS_CLIENT_ID / $ATLAS_CLIENT_SECRET
-#   2. ~/.config/daimon/atlas.env — KEY=value lines (preferred; cheapest to read)
+#   2. ~/.daimon/atlas.env — KEY=value lines (preferred; cheapest to read). The
+#      legacy ~/.config/daimon/atlas.env is still read until the migration runs.
 #   3. the service account the MongoDB MCP server is already configured with, so
 #      a working MCP setup needs no second copy of the credentials
 atlas_creds() {
@@ -32,7 +33,9 @@ def emit(cid, sec):
 
 emit(os.environ.get("ATLAS_CLIENT_ID"), os.environ.get("ATLAS_CLIENT_SECRET"))
 
-path = os.path.expanduser("~/.config/daimon/atlas.env")
+for path in map(os.path.expanduser, ("~/.daimon/atlas.env", "~/.config/daimon/atlas.env")):
+    if os.path.exists(path):
+        break
 if os.path.exists(path):
     kv = {}
     with open(path) as fh:

@@ -1,0 +1,9 @@
+# Copy to ~/.daimon/daemons/dependency-reviewer.toml (daimon init does it)
+# and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose dependency PRs this daemon triages
+
+[inputs]
+# GitHub's Dependabot is "app/dependabot"; for Renovate use "app/renovate".
+bot_author = "app/dependabot"
+base = "main"

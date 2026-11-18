@@ -11,11 +11,15 @@ source "$DAIMON_LIB_DIR/logging.sh"
 source "$DAIMON_LIB_DIR/reap.sh"
 source "$DAIMON_LIB_DIR/budget.sh"
 source "$DAIMON_LIB_DIR/backend-status.sh"
+source "$DAIMON_LIB_DIR/worktrees.sh"
+source "$DAIMON_LIB_DIR/agent_status.sh"
 
 ensure_state_dirs
 OPLOG="$(logs_dir)/$SLUG.log"
 eval "$(cfg daemon-env "$SLUG")"
 COMMAND="$DAIMON_D_COMMAND"
+# A gate that asked to resume a session also names the command to type into it.
+[ -n "${DAIMON_RESUME_COMMAND:-}" ] && COMMAND="$DAIMON_RESUME_COMMAND"
 DANGER="$DAIMON_D_DANGER"
 STUCK_AFTER="$DAIMON_D_STUCK_AFTER"
 WORKING_DIR="$DAIMON_D_WORKING_DIR"
@@ -88,6 +92,15 @@ run_one_backend() {
 
   local bin args stdin=""
   bin="$(backend_bin)"
+  DAIMON_AGENT_SESSION="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  DAIMON_RESUME=0
+  if [ -n "${DAIMON_RESUME_SESSION:-}" ] && declare -F backend_supports_resume >/dev/null \
+     && backend_supports_resume; then
+    DAIMON_AGENT_SESSION="$DAIMON_RESUME_SESSION"; DAIMON_RESUME=1
+  fi
+  export DAIMON_AGENT_SESSION DAIMON_RESUME
+  local resume_note=""
+  [ "$DAIMON_RESUME" = "1" ] && resume_note=" resume=$DAIMON_AGENT_SESSION command=$COMMAND"
   args="$(backend_cli_args "$model" "$DANGER" "$session")"
   if [ "$mode" = "oneshot" ]; then
     PROMPTF="$(prompts_dir)/${SLUG}-${be}.prompt"
@@ -99,7 +112,7 @@ run_one_backend() {
   # (two mentions at once). tmux refuses a duplicate name atomically: if the
   # other launcher won, leave its session alone — don't reap it on return.
   if ! tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
-    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin" 2>/dev/null; then
+    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_AGENT_SESSION='$DAIMON_AGENT_SESSION' DAIMON_RESUME='$DAIMON_RESUME' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin" 2>/dev/null; then
     trap - RETURN
     log_event "$SLUG" skip "session $session already running" >> "$OPLOG"
     return 0
@@ -110,7 +123,7 @@ run_one_backend() {
   if [ "$mode" = "oneshot" ]; then
     tmux pipe-pane -t "$session" "cat >> '$tfile'" 2>/dev/null || true
   fi
-  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER tools=${DAIMON_D_TOOLS:+on} stuck_after=$STUCK_AFTER" >> "$OPLOG"
+  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER tools=${DAIMON_D_TOOLS:+on} stuck_after=$STUCK_AFTER$resume_note" >> "$OPLOG"
 
   local regex booted=0 i
   regex="$(backend_ready_regex "$DANGER")"
@@ -140,6 +153,8 @@ run_one_backend() {
     tmux send-keys -t "$session" "$COMMAND"; sleep 0.5; tmux send-keys -t "$session" Enter
     log_event "$SLUG" running "backend=$be command=$COMMAND" >> "$OPLOG"
   fi
+  # Now working: report in the background so the run never waits on it.
+  ( report_agent_status ) >/dev/null 2>&1 &
 
   if [ "$mode" = "idle" ] || [ "$mode" = "oneshot" ]; then
     pane_heartbeat "$session" "$HEARTBEAT" & HBPID=$!
@@ -224,11 +239,21 @@ if [ -n "$EXHAUSTED_TRANSCRIPT" ] && [ "$fallback_succeeded" -ne 1 ]; then
     bash "$DAIMON_LIB_DIR/throttle-detect.sh" "$EXHAUSTED_BACKEND" 2>/dev/null || true
 fi
 
+# Remove the daemon's finished worktrees (clean_worktrees = branch prefix); keep
+# and report any with uncommitted or unpushed work.
+if [ -n "${DAIMON_D_CLEAN_WORKTREES:-}" ] && [ -n "$WORKING_DIR" ]; then
+  sweep_worktrees "$WORKING_DIR" "$DAIMON_D_CLEAN_WORKTREES" "${DAIMON_D_BASE:-main}" \
+    | while IFS= read -r msg; do log_event "$SLUG" cleanup "$msg" >> "$OPLOG"; done
+fi
+
 # Remove state an agent leaked into the repo. The first path is literal: an
 # unexpanded write to '$DAIMON_STATE_FILE' creates a file by that exact name.
+# A working_dir of ~ is no repo: its .daimon is the personal settings dir.
 if [ -n "$WORKING_DIR" ] && [ -d "$WORKING_DIR" ]; then
   # shellcheck disable=SC2016  # the single-quoted $DAIMON_STATE_FILE is a literal filename
   for stray in "$WORKING_DIR/"'$DAIMON_STATE_FILE' "$WORKING_DIR/.daimon"; do
+    [ "$stray" -ef "$HOME/.daimon" ] && continue
+    [ "$stray" -ef "$DAIMON_PERSONAL_DIR" ] && continue
     # An if, not `[ -e ] && ...`: a missing artifact must not become the
     # script's exit status, or `daimon run` reports every clean run as failed.
     if [ -e "$stray" ]; then
@@ -236,6 +261,11 @@ if [ -n "$WORKING_DIR" ] && [ -d "$WORKING_DIR" ]; then
     fi
   done
 fi
+
+# The run is over and its sessions are reaped: report idle. In the foreground
+# (bounded by AGENT_STATUS_TIMEOUT) because launchd kills a job's leftover
+# processes once this script exits, which would drop a backgrounded report.
+report_agent_status >/dev/null 2>&1
 
 # Drain the queue one run at a time. A daemon that takes one message per run
 # (`daimon inbox take <slug> --one`) leaves the rest queued; go again, through

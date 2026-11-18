@@ -19,19 +19,45 @@ dAImon — agent daemon pipeline
 
 usage: daimon <command> [args]
 
-  init [slug...]     choose active daemons + scaffold their local config
+  init [slug...]     choose daemons from the catalog + scaffold their personal settings
+  catalog            list every daemon you can install, with its source and state
+  add [--pack [dir]] <slug>...
+                     install daemons (+ personal settings, sync); registers nothing.
+                     --pack first copies each from dAImon's catalog into a pack
+  eject <slug> [--pack [dir]]
+                     copy a daemon into daemons/ to edit (or, --pack, a dAImon
+                     catalog daemon into a pack); .origin.json records the source
+  eject <slug> --as <new> [--pack [dir]]
+                     fork it as a new daemon <new>, beside the original
+  uneject [--yes] <slug>
+                     delete your ejected copy so the daemon is linked again
+  outdated           ejected copies (yours and packs') whose upstream or copy changed
+  diff <slug>        diff -ru upstream's current files against your copy
+  remove [--yes] <slug>...
+                     unregister and uninstall daemons (personal settings kept)
+  migrate            bring an install up to date: ~/.config/daimon moved to
+                     ~/.daimon, legacy in-repo settings moved there too,
+                     [daemons].installed written once
+                     (idempotent; install and init run it for you)
   run <slug>         gated run (throttle/inbox/discovery), then launch
   launch <slug>      launch the agent now, bypassing gates
   watchdog           sweep orphan sessions, leaked MCP servers, old logs
-  new                scaffold a new daemon (opens /daimon-builder in Claude)
+  new [--pack [dir]] create a daemon with Claude (/daimon-builder); --pack puts it in a pack
+  scaffold <slug> [--pack [dir] | --catalog]
+                     write an inert daemon skeleton: your own daemons/ (default),
+                     a pack's daemons/, or dAImon's catalog/ to contribute it
   sync [--all]       render skills + refresh registered plists (--all also creates missing ones)
-  daemons            list discovered daemons
+  update [--force]   fast-forward this install to its green upstream, then install + sync
+                     (hourly when [update].auto is on; --force ignores the opt-out file)
+  daemons            list active daemons (installed + ejected, minus disabled)
+  packs              list configured packs and what each adds
   state <slug>       show a daemon's work-tracking record (--clear to reset)
                      (get [slug] / set [slug] read/write raw JSON — used by agents)
   rounds <slug>      per-item round-cap overrides (<item> <max> to set)
   skip <slug>        per-item exclusions (<item> to add, --clear to undo)
   inbox take <slug>  drain a daemon's queued inbox messages, deduped, as JSON
                      (--one: only the oldest; the next run takes the next)
+  log <message>      record one outcome line on the daemon's log (used by agents)
   check-scope [base] fail if the branch touches paths outside allowed_paths
   models <backend>   list available models (claude|codex)
   mcp setup slack [client-id]
@@ -48,7 +74,8 @@ usage: daimon <command> [args]
   bridge [args...]   run the env-bridge Slack app (slack run from its dir; args pass to slack)
   bridge service install|uninstall|status
                      run the bridge in the background (launchd), no terminal needed
-  command new <name> scaffold a slack-commands plugin (--shared to commit it, --mutating)
+  command new <name> scaffold a slack-commands plugin (--shared to commit it,
+                     --pack <dir> to put it in a pack, --mutating)
   install            install plists, hooks, and the TUI venv
                      (--load schedules; --worklog adds the standup worklog hook)
 EOF
@@ -56,16 +83,26 @@ EOF
 
 case "$CMD" in
   init)      exec python3 -m daimon.init "$@" ;;
+  migrate)   exec python3 "$LIB/migrate.py" "$@" ;;
+  catalog)   exec python3 -m daimon.catalog list "$@" ;;
+  add)       exec python3 -m daimon.catalog add "$@" ;;
+  remove)    exec python3 -m daimon.catalog remove "$@" ;;
+  eject|uneject|outdated|diff)
+             exec python3 -m daimon.eject "$CMD" "$@" ;;
   run)       exec bash "$LIB/run.sh" "$@" ;;
   launch)    exec bash "$LIB/launch.sh" "$@" ;;
   watchdog)  exec bash "$LIB/watchdog.sh" "$@" ;;
-  new)       exec claude "/daimon-builder" ;;
+  new)       exec claude "/daimon-builder $*" ;;
+  scaffold)  exec python3 -m daimon.scaffold "$@" ;;
   sync)      exec python3 -m daimon.sync "$@" ;;
+  update)    exec bash "$LIB/self_update.sh" "$@" ;;
   daemons)   exec python3 "$LIB/config.py" daemons ;;
+  packs)     exec python3 "$LIB/config.py" packs ;;
   state)     exec bash "$LIB/state.sh" "$@" ;;
   rounds)    exec bash "$LIB/round-caps.sh" "$@" ;;
   skip)      exec bash "$LIB/skips.sh" "$@" ;;
   inbox)     exec python3 "$LIB/inbox_take.py" "$@" ;;
+  log)       exec bash "$LIB/result.sh" "$@" ;;
   check-scope) exec bash "$LIB/check-scope.sh" "$@" ;;
   models)    exec python3 "$LIB/models.py" "$@" ;;
   mcp)       exec python3 "$LIB/mcp_setup.py" "$@" ;;

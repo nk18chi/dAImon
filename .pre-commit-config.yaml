@@ -42,7 +42,7 @@ repos:
         entry: python3 -m daimon.gen_docs
         language: system
         pass_filenames: false
-        files: '^(daemons/.*/(daemon\.toml|skill/SKILL\.md)|daimon/gen_docs\.py)$'
+        files: '^(catalog/.*/(daemon\.toml|skill/SKILL\.md)|daimon/gen_docs\.py)$'
       - id: check-links
         name: markdown link check
         entry: python3 -m daimon.check_links

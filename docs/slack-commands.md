@@ -6,7 +6,7 @@ daemons post updates back. Three pieces:
 | Piece | What it does |
 |---|---|
 | `slack-commands` daemon | The engine. Reads commands from its inbox, runs the matching plugin runbook, replies in Slack. |
-| A front door | Either `bridges/env-bridge` (a Socket Mode Slack app: slash command + @-mention) or the `slack-channel-watch` daemon (polls channels for `?`-prefixed messages — no Slack app needed). |
+| A front door | The `slack-channel-watch` daemon (polls channels for `?`-prefixed messages — no Slack app needed). |
 | `slack-standup` daemon | Scheduled outbound: posts a standup on a weekday cadence. |
 | `slack-ask` daemon | Q&A bot: answers free-form @-mention questions from the codebase (see [below](#qa-bot-slack-ask)). |
 
@@ -25,14 +25,12 @@ daemons post updates back. Three pieces:
   MCP-enabled app, pass its public ID as `daimon mcp setup slack <client-id>`
   instead. `daimon doctor` checks both paths, including whether Codex completed
   OAuth.
-- **jq**, **gh**, **node 18+** (front door only), and the
-  [Slack CLI](https://docs.slack.dev/tools/slack-cli) (app front door
-  only). `make tooling` reports what's missing.
+- **jq** and **gh**. `make tooling` reports what's missing.
 
-## Pick a front door
+## Set up the front door
 
 **Channel watcher (no app, no admin approval).** Configure
-`daemons/slack-channel-watch/daemon.local.toml` with the channel IDs to
+`~/.daimon/daemons/slack-channel-watch.toml` with the channel IDs to
 watch; anyone types `?help` in one of them. Two polling modes:
 
 - *Scripted* (preferred): set `token_command` to a command printing a
@@ -43,19 +41,17 @@ watch; anyone types `?help` in one of them. Two polling modes:
   session using the Slack MCP. Works with no extra token; costs a model
   call per tick, so keep the interval at 120s or higher.
 
-**Slack app.** `make bridge-setup` (toolchain check + names + manifest),
-then `daimon bridge` to create and run it. Gives `/<your-command>` and
-@-mentions. Each engineer registers their own app — `BRIDGE_NAME` and
-`BRIDGE_SLASH_COMMAND` come from `.env`, and slash commands are
-workspace-global so they must be unique.
-
 ## Writing a command
 
 Commands are markdown runbooks, one file per command:
 
-- `daemons/slack-commands/commands/` — committed, shared by everyone.
-- `daemons/slack-commands/commands.local/` — gitignored, yours or your
-  company's; a local file overrides a shared one of the same `name`.
+- `catalog/slack-commands/commands/` — committed, shared by everyone.
+- `commands/` in each [pack](packs.md) — your team's.
+- `~/.daimon/commands/` — yours, outside every repo; a file here
+  overrides a shared or pack one of the same `name`. `daimon command new <name>`
+  writes here. (Older installs kept these in the gitignored
+  `daemons/slack-commands/commands.local/`; it is still read until
+  `daimon migrate` moves its files.)
 
 Drop a file in, and it's live on the next run — no sync, no restart.
 
@@ -90,7 +86,7 @@ Conventions:
 
 ## Access control
 
-`mutate_allowlist` in `daemon.local.toml` is the root of trust (Slack user
+`mutate_allowlist` in your `~/.daimon/daemons/slack-commands.toml` is the root of trust (Slack user
 IDs, machine-only). Those admins manage everyone else from Slack:
 `access list` / `access grant @user` / `access revoke @user`, persisted in
 daemon state. Grants never confer admin.

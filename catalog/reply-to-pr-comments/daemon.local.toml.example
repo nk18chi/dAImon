@@ -1,0 +1,4 @@
+# Copy to ~/.daimon/daemons/reply-to-pr-comments.toml (daimon init does it)
+# and set values for THIS machine.
+[daemon]
+working_dir = "~/code/your-repo"   # the repo whose PR comment threads this watches

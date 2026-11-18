@@ -17,8 +17,28 @@ def _commands(entries) -> set:
     return {h.get("command") for entry in entries for h in entry.get("hooks", [])}
 
 
+# A hook that touches the done sentinel is dAImon's own completion signal. Only the
+# shipped version may exist: an older copy left beside it would still fire, so
+# an outdated one is replaced rather than deduped against.
+SENTINEL_MARK = "$DAIMON_SENTINEL"
+
+
+def _drop_stale_sentinel_hooks(existing: list, entries: list) -> None:
+    shipped = _commands(entries)
+    existing[:] = [
+        e
+        for e in existing
+        if not (
+            (cmds := _commands([e]))
+            and all(c and SENTINEL_MARK in c for c in cmds)
+            and not cmds <= shipped
+        )
+    ]
+
+
 def _merge_new_entries(existing: list, entries: list) -> int:
     """Append each entry whose commands aren't all present already; return count added."""
+    _drop_stale_sentinel_hooks(existing, entries)
     have = _commands(existing)
     added = 0
     for entry in entries:

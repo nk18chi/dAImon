@@ -2,5 +2,5 @@
 # editors (Taplo / VS Code "Even Better TOML") give autocomplete + validation.
 # Regenerate the schema with `daimon sync`.
 [[rule]]
-include = ["daemons/*/daemon.toml", "daemons/*/daemon.local.toml"]
-schema = "daemons/daemon.schema.json"
+include = ["catalog/*/daemon.toml", "daemons/*/daemon.toml"]
+schema = "catalog/daemon.schema.json"

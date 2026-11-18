@@ -13,10 +13,14 @@ for arg in "$@"; do
   esac
 done
 
-CONFIG_DIR="$HOME/.config/daimon"
-CONFIG="$CONFIG_DIR/daimon.toml"
+# Personal settings moved from ~/.config/daimon to ~/.daimon: move them first, so
+# a fresh config is never created beside (and in front of) the legacy one.
+python3 "$ROOT/lib/migrate.py" --personal-dir \
+  || echo "warning: could not finish moving ~/.config/daimon to ~/.daimon — run 'daimon migrate'" >&2
+
+CONFIG="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import config; print(config.global_config_path())' "$ROOT/lib")"
 if [ ! -f "$CONFIG" ]; then
-  mkdir -p "$CONFIG_DIR"
+  mkdir -p "$(dirname "$CONFIG")"
   cp "$ROOT/config/daimon.toml.example" "$CONFIG"
   echo "created $CONFIG — review it before scheduling (install continues)"
 fi
@@ -53,7 +57,20 @@ ln -sf "$ROOT/bin/daimon" "$HOME/.local/bin/daimon"
 ln -sf "$ROOT/bin/daimonctl" "$HOME/.local/bin/daimonctl"
 echo "linked daimon + daimonctl into ~/.local/bin (ensure it is on your PATH)"
 
-PYTHONPATH="$ROOT" python3 -m daimon.sync --all
+# Personal settings live in ~/.daimon, not the repo: move any legacy
+# daemon.local.toml / profile.local.toml there (idempotent; a no-op once done).
+# Runs on every install, so the self-updater migrates after a fast-forward.
+python3 "$ROOT/lib/migrate.py" || echo "warning: settings migration incomplete — run 'daimon migrate'" >&2
+
+# A plist in ~/Library/LaunchAgents is a registration: launchd loads it at the
+# next login whether or not anything loaded it now. So a plain install only
+# refreshes daemons already registered; --load (scheduling is the point there)
+# creates one for every active daemon.
+if [ "$LOAD" -eq 1 ]; then
+  PYTHONPATH="$ROOT" python3 -m daimon.sync --all
+else
+  PYTHONPATH="$ROOT" python3 -m daimon.sync
+fi
 
 if [ "$LOAD" -eq 1 ]; then
   load_fail=0

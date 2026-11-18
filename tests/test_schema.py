@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "lib"))
 import config  # noqa: E402
 
-DAEMONS = ROOT / "daemons"
+DAEMONS = ROOT / "catalog"
 
 
 @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema (dev dependency) not installed")
@@ -51,7 +51,7 @@ class SchemaDriftTest(unittest.TestCase):
         self.assertEqual(
             committed,
             json.dumps(config.daemon_schema(), indent=2) + "\n",
-            "daemons/daemon.schema.json is stale — run `daimon sync`",
+            "catalog/daemon.schema.json is stale — run `daimon sync`",
         )
 
 

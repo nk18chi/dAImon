@@ -1,7 +1,17 @@
 # Writing a daemon
 
-A daemon is a folder under `daemons/<slug>/` with three files. The framework
-auto-discovers it; `daimon sync` regenerates its plist and renders its skill.
+A daemon is a folder `<slug>/` with three files. Where it lives decides who gets
+it ([catalog](catalog.md)):
+
+- your own `daemons/<slug>/` in the dAImon install: gitignored, just for you,
+  and active as soon as it exists (`daimon scaffold <slug>`);
+- a [pack](packs.md)'s `daemons/<slug>/`: shared with a team, installed by each
+  person with `daimon add <slug>` (`daimon scaffold <slug> --pack`). Team-specific
+  daemons always go here;
+- dAImon's `catalog/<slug>/`: generic, contributed upstream by PR
+  (`daimon scaffold <slug> --catalog`).
+
+`daimon sync` renders its skill and refreshes its plist once it is registered.
 
 ## 1. `daemon.toml`
 
@@ -33,10 +43,21 @@ The gate. Inputs arrive as `DAIMON_INPUT_*`. Keep it cheap. Exit codes are read 
   surfaces instead of disabling the daemon invisibly. List the inputs the gate
   depends on in `required_inputs` so a missing one is caught before this runs.
 
+To make the log say what the gate saw, write a one-line summary (ids, counts) to
+the file named by `$DAIMON_GATE_NOTE`. `run.sh` appends it to the
+`launch_decision` or `skip` line.
+
+A gate can also ask to **resume an earlier agent session** instead of starting a
+fresh one, so the agent keeps the context it built: write the session id on line
+1 and the command to type into it on line 2 of `$DAIMON_GATE_RESUME`. The backend
+must support resuming (see backends/README.md); otherwise the command runs in a
+fresh session. pr-manager uses this to hand review feedback back to the
+work-queue session that wrote the PR.
+
 ```bash
 #!/usr/bin/env bash
 set -uo pipefail
-source "$(dirname "$0")/../../profiles/github/lib.sh"
+source "$DAIMON_INSTALL_ROOT/profiles/github/lib.sh"  # exported by dAImon; works in a pack too
 [ "$(gh_pr_count --search "$DAIMON_INPUT_FILTER")" -gt 0 ]
 ```
 
@@ -87,10 +108,38 @@ reading this project's Claude memory at the start of a run (to skip known false
 positives) and writing lessons at the end (so the next run is smarter). Set
 `learning = false` in `[daemon]` to opt a daemon out.
 
+A daemon that works in git worktrees can set `clean_worktrees = "<branch prefix>"`
+in `[daemon]`. After every run, `launch.sh` removes worktrees on branches with that
+prefix whose changes are committed and pushed, and logs any it keeps (uncommitted
+files or unpushed commits) as `event=cleanup`.
+
+Every rendered skill also gets `references/unattended.md`: no one answers a
+permission prompt during a scheduled run, so the agent must avoid commands the
+operator's settings make ask-first (`rm`, `git reset`, `git rebase`…) instead of
+stalling on them.
+
+It also gets `references/results.md`, which has the agent record one
+`event=result` line per item it handled with `daimon log '<outcome> <id> <link> —
+<title>'`, so the operational log says what each run did, not just that it ran.
+
 A daemon that posts comments (it has a `bot_marker` input) additionally gets
 `references/skill-conventions.md` appended — the marker-every-comment and
 durable-state-via-`daimon state` conventions — so you inherit them instead of
 restating them in each skill.
+
+## 4. `doctor.sh` (optional)
+
+What only this daemon knows it needs, such as a keychain item, a login, or a
+personal setting, can be checked by `daimon doctor`. Add `doctor.sh`: it runs
+for registered daemons, with the daemon's inputs as `DAIMON_INPUT_*` and its
+folder as `DAIMON_DAEMON_DIR`. Exit 0 = ok, 1 = warn, 2 = fail. The first line
+of output is the message.
+
+```bash
+security find-generic-password -s "$DAIMON_INPUT_CF_TOKEN_SERVICE" >/dev/null 2>&1 \
+  && echo "Cloudflare token in keychain" \
+  || { echo "no Cloudflare token in keychain ($DAIMON_INPUT_CF_TOKEN_SERVICE)"; exit 2; }
+```
 
 ## Activate
 
@@ -107,19 +156,18 @@ Each daemon's `README.md` is generated — never hand-edit it; edit `daemon.toml
 
 ## Keeping a daemon out of the repo
 
-A daemon that only makes sense on your machine — one wired to a private tracker,
-epic, or repo — can stay out of git entirely. Add it to `.git/info/exclude`
-(local, uncommitted) rather than `.gitignore`, which is shared:
+Everything in `daemons/` (apart from its README) is gitignored, so a daemon you
+scaffold there never reaches git: it is yours, on this machine. It is active
+without `daimon add`, and takes precedence over a catalog daemon with the same
+slug.
 
-```bash
-echo 'daemons/<slug>/' >> "$(git rev-parse --git-dir)/info/exclude"
-```
+A folder named `<slug>.local` works the same way. The suffix is not part of the
+slug: `daemons/<slug>.local` loads as `<slug>`, with the same command, plist,
+skill and state names. Having both `daemons/<slug>` and `daemons/<slug>.local` is
+a validation error.
 
-`make docs` leaves an excluded daemon out of the committed `daemons/README.md`
-index, so generating docs never dirties a tracked file with a name that isn't in
-the repo. It still writes that daemon's own `README.md`, which lives inside the
-excluded folder and stays local. Everything else — discovery, `daimon sync`,
-scheduling — treats it exactly like any other daemon.
+`make docs` documents `catalog/` only, so your own daemons never reach the
+committed `catalog/README.md` index.
 
 ## Tips
 

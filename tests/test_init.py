@@ -20,36 +20,24 @@ def _load():
 init = _load()
 
 
-class SetDisabledTest(unittest.TestCase):
-    def test_replaces_in_place_preserving_comments(self):
-        text = "[daemons]\n# keep me\ndisabled = []\n"
-        out = init.set_disabled_text(text, ["a", "b"])
-        self.assertIn("# keep me", out)
-        self.assertIn('disabled = ["a", "b"]', out)
-        self.assertEqual(out.count("disabled ="), 1)
+class ParseChoiceTest(unittest.TestCase):
+    OFFERED = ["alpha", "beta", "gamma"]
 
-    def test_preserves_other_sections(self):
-        text = '[core]\nnamespace = "daimon"\n\n[daemons]\ndisabled = ["x"]\n\n[budget]\nhourly_cap = 12\n'
-        out = init.set_disabled_text(text, [])
-        self.assertIn('namespace = "daimon"', out)
-        self.assertIn("hourly_cap = 12", out)
-        self.assertIn("disabled = []", out)
+    def test_blank_keeps_the_current_set(self):
+        self.assertEqual(init._parse_choice("", self.OFFERED, ["beta"]), ["beta"])
 
-    def test_adds_line_when_section_present_without_disabled(self):
-        text = "[daemons]\n"
-        out = init.set_disabled_text(text, ["a"])
-        self.assertIn("[daemons]", out)
-        self.assertIn('disabled = ["a"]', out)
+    def test_numbers_and_names_mix(self):
+        self.assertEqual(init._parse_choice("3, alpha 3", self.OFFERED, []), ["gamma", "alpha"])
 
-    def test_adds_section_when_absent(self):
-        text = '[core]\nnamespace = "daimon"\n'
-        out = init.set_disabled_text(text, ["a"])
-        self.assertIn("[daemons]", out)
-        self.assertIn('disabled = ["a"]', out)
+    def test_all_and_none(self):
+        self.assertEqual(init._parse_choice("all", self.OFFERED, []), self.OFFERED)
+        self.assertEqual(init._parse_choice("none", self.OFFERED, ["alpha"]), [])
 
-    def test_trailing_newline_preserved(self):
-        self.assertTrue(init.set_disabled_text("[daemons]\ndisabled = []\n", []).endswith("\n"))
-        self.assertFalse(init.set_disabled_text("[daemons]\ndisabled = []", []).endswith("\n"))
+    def test_unknown_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "delta"):
+            init._parse_choice("delta", self.OFFERED, [])
+        with self.assertRaisesRegex(ValueError, "4"):
+            init._parse_choice("4", self.OFFERED, [])
 
 
 class SetWorkingDirTest(unittest.TestCase):

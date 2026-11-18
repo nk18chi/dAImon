@@ -8,8 +8,8 @@ trap 'rm -rf "$TMP"' EXIT
 
 # Sandbox install root with one daemon carrying its own hourly_cap, so the
 # per-daemon budget branch has something to resolve against.
-mkdir -p "$TMP/inst/daemons/capped"
-cat > "$TMP/inst/daemons/capped/daemon.toml" <<EOF
+mkdir -p "$TMP/inst/catalog/capped"
+cat > "$TMP/inst/catalog/capped/daemon.toml" <<EOF
 [daemon]
 schedule = { interval = 60 }
 command = "/capped"
@@ -57,6 +57,9 @@ budget_check foo
 check "$BUDGET_OVER" "1" "budget over + non-exempt slug -> skip"
 budget_check cheap-poller
 check "$BUDGET_OVER" "0" "budget over + exempt slug -> run"
+before="$(budget_total_this_hour)"
+budget_record cheap-poller
+check "$(budget_total_this_hour)" "$before" "exempt slug's launches don't consume the pool"
 budget_check capped   # own hourly_cap=2, has 0 launches; global pool is over
 check "$BUDGET_OVER" "0" "own-cap daemon under its cap -> run despite global"
 budget_record capped
@@ -144,6 +147,20 @@ footer="⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
 if [[ "$footer" =~ $ready_re ]]; then pm=1; else pm=0; fi
 check "$pm" "1" "ready regex matches the auto-mode footer"
 
+export DAIMON_AGENT_SESSION="0f0e0d0c-0000-4000-8000-000000000001"
+case "$(backend_cli_args opus 1 sess)" in *"--session-id $DAIMON_AGENT_SESSION"*) sid=1;; *) sid=0;; esac
+check "$sid" "1" "claude backend pins --session-id when DAIMON_AGENT_SESSION is set"
+unset DAIMON_AGENT_SESSION
+
+# The Stop hook marks done only for the daemon's own session, never for a child
+# `claude -p` that a user hook spawns with the same env.
+STOP_CMD="$(jq -r '.Stop[0].hooks[0].command' "$ROOT/config/hooks/claude-hooks.json")"
+SENT="$TMP/sentinel"; rm -f "$SENT"
+echo '{"session_id":"someone-else"}' | DAIMON_SENTINEL="$SENT" DAIMON_AGENT_SESSION="0f0e" sh -c "$STOP_CMD"
+check "$([ -e "$SENT" ] && echo 1 || echo 0)" "0" "Stop hook ignores a child session's stop"
+echo '{"session_id":"0f0e"}' | DAIMON_SENTINEL="$SENT" DAIMON_AGENT_SESSION="0f0e" sh -c "$STOP_CMD"
+check "$([ -e "$SENT" ] && echo 1 || echo 0)" "1" "Stop hook marks done for the daemon's own session"
+
 export DAIMON_D_WORKING_DIR="/tmp/x.y/repo"
 source "$ROOT/backends/codex.sh"
 check "$(backend_completion_mode)" "oneshot" "codex backend is oneshot"
@@ -177,5 +194,45 @@ check "$?" "2" "state set rejects invalid json"
 check "$(DAIMON_SLUG=st bash "$ROOT/lib/state.sh" get)" '[{"n":1}]' "state unchanged after rejected set"
 echo '{"a":2}' | bash "$ROOT/lib/state.sh" set other
 check "$(bash "$ROOT/lib/state.sh" get other)" '{"a":2}' "state get/set honors an explicit slug"
+
+DAIMON_SLUG=lg bash "$ROOT/lib/result.sh" 'PR opened sc-1 "x"
+second line'
+check "$(tail -1 "$TMP/state/logs/lg.log" | sed 's/^[^ ]* //')" \
+  "level=info daemon=lg event=result msg=\"PR opened sc-1 'x' second line\"" \
+  "daimon log records one sanitized result line"
+bash "$ROOT/lib/result.sh" --slug other2 'skipped sc-2'
+check "$(grep -c 'event=result' "$TMP/state/logs/other2.log")" "1" "daimon log honors --slug"
+env -u DAIMON_SLUG bash "$ROOT/lib/result.sh" 'x' 2>/dev/null
+check "$?" "2" "daimon log without a slug fails"
+
+# worktree sweep: removes clean+pushed prefix worktrees, keeps dirty/unpushed/foreign
+source "$ROOT/lib/worktrees.sh"
+W="$TMP/wt"; mkdir -p "$W"
+git init -q --bare "$W/origin.git"
+git clone -q "$W/origin.git" "$W/repo" 2>/dev/null
+( cd "$W/repo" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init && git push -q origin HEAD:main 2>/dev/null && git fetch -q )
+g() { git -C "$W/repo" -c user.email=t@t -c user.name=t "$@"; }
+g worktree add -q "$W/repo/.worktrees/pushed" -b daimon/pushed origin/main
+( cd "$W/repo/.worktrees/pushed" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m a && git push -q -u origin daimon/pushed 2>/dev/null )
+g worktree add -q "$W/repo/.worktrees/dirty" -b daimon/dirty origin/main
+echo x > "$W/repo/.worktrees/dirty/new.txt"
+g worktree add -q "$W/repo/.worktrees/ahead" -b daimon/ahead origin/main
+( cd "$W/repo/.worktrees/ahead" && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m b )
+g worktree add -q "$W/repo/.worktrees/mine" -b feat/mine origin/main
+out="$(sweep_worktrees "$W/repo" "daimon/" main)"
+check "$(echo "$out" | grep -c '^removed worktree pushed')" "1" "sweep removes a clean, pushed daimon worktree"
+check "$([ -d "$W/repo/.worktrees/pushed" ] && echo yes || echo no)" "no" "sweep deleted the pushed worktree dir"
+check "$(echo "$out" | grep -c '^kept dirty.*uncommitted')" "1" "sweep keeps a worktree with uncommitted files"
+check "$(echo "$out" | grep -c '^kept ahead.*unpushed')" "1" "sweep keeps a worktree with unpushed commits"
+check "$([ -d "$W/repo/.worktrees/mine" ] && echo yes || echo no)" "yes" "sweep ignores branches outside the prefix"
+check "$(sweep_worktrees "$W/repo" "" main | grep -c .)" "0" "empty prefix sweeps nothing"
+
+# claude backend: a resumed run passes --resume, a fresh one --session-id
+( source "$ROOT/backends/claude.sh"
+  DAIMON_AGENT_SESSION=abc DAIMON_RESUME=1 backend_cli_args opus 1 s | grep -q -- "--resume abc" && echo yes || echo no ) > "$TMP/r1"
+check "$(cat "$TMP/r1")" "yes" "claude backend resumes a session by id"
+( source "$ROOT/backends/claude.sh"
+  DAIMON_AGENT_SESSION=abc DAIMON_RESUME=0 backend_cli_args opus 1 s | grep -q -- "--session-id abc" && echo yes || echo no ) > "$TMP/r2"
+check "$(cat "$TMP/r2")" "yes" "claude backend pins a fresh session id"
 
 exit "$fails"

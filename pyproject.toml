@@ -45,7 +45,7 @@ ignore = ["E501", "E702"]
 
 [tool.ruff.lint.isort]
 # lib/ modules import each other as top-level names (config, schedule_fmt, …).
-known-first-party = ["config", "models", "schedule_fmt", "toml_emit", "json_state", "daimon"]
+known-first-party = ["config", "migrate", "models", "schedule_fmt", "toml_emit", "json_state", "daimon"]
 
 # ---------------------------------------------------------------------------
 # pyright — type checking. Run: `uv run pyright`.

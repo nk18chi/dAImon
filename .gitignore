@@ -5,7 +5,9 @@ tui/.venv/
 .DS_Store
 config/daimon.toml
 *.local.toml
-daemons/*/daemon.local.toml
 profiles/*/profile.local.toml
 .claude/settings.local.json
-daemons/*/commands.local/
+# daemons/ holds your own (ejected) daemons, including private <slug>.local
+# ones: only its README is tracked. dAImon's shared daemons live in catalog/.
+daemons/*
+!daemons/README.md

@@ -8,6 +8,7 @@ WARN=0; FAIL=0
 ok()   { echo "  ok    $1"; }
 warn() { echo "  warn  $1"; WARN=1; }
 bad()  { echo "  FAIL  $1"; FAIL=1; }
+note() { echo "  note  $1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 claude_trusts() { python3 "$DAIMON_LIB_DIR/claude_trust.py" "$1" 2>/dev/null; }
 
@@ -76,6 +77,29 @@ for slug in $(cfg daemons); do
   [ "$msg" = "$slug" ] && ok "$slug" || warn "$msg"
 done
 
+# A daemon can ship doctor.sh for what only it knows it needs (a keychain item,
+# a personal setting): exit 0 ok, 1 warn, 2 fail, first line of output as the
+# message. Run for registered daemons only, with the daemon's inputs in env.
+daemon_check() {  # slug dir
+  local out rc
+  out="$(set -a; eval "$(cfg env "$1")"; set +a
+         DAIMON_DAEMON_DIR="$2" bash "$2/doctor.sh" 2>&1)"; rc=$?
+  out="$(printf '%s' "$out" | head -1)"
+  case "$rc" in
+    0) ok "$1: ${out:-ok}" ;;
+    1) warn "$1: ${out:-needs attention}" ;;
+    *) bad "$1: ${out:-check failed (exit $rc)}" ;;
+  esac
+}
+checks_header=0
+for slug in $(cfg daemons); do
+  [ -f "$HOME/Library/LaunchAgents/com.${DAIMON_NS}.${slug}.plist" ] || continue
+  dir="$(cfg daemon-dir "$slug")"
+  [ -f "$dir/doctor.sh" ] || continue
+  [ "$checks_header" = 1 ] || { echo "daemon checks"; checks_header=1; }
+  daemon_check "$slug" "$dir"
+done
+
 if [ "$needs_codex" = 1 ]; then
   echo "codex"
   codex_bin="${DAIMON_CODEX_BIN:-codex}"
@@ -114,24 +138,6 @@ check_slack_mcp() {
   fi
 }
 
-check_bridge_toolchain() {
-  if have slack; then
-    ok "slack CLI"
-    slack auth list >/dev/null 2>&1 && ok "slack CLI authenticated" \
-      || warn "slack CLI not authenticated (slack login) — app creation and 'daimon bridge' fail"
-  else
-    warn "slack CLI missing (https://docs.slack.dev/tools/slack-cli) — the bridge app can't be created or run"
-  fi
-  have node && ok "node $(node --version 2>/dev/null)" || warn "node missing — the bridge app can't run"
-}
-
-check_bridge_project() {
-  local bridge="$DAIMON_INSTALL_ROOT/bridges/env-bridge"
-  [ -d "$bridge/node_modules" ] && ok "bridge deps installed" || warn "bridge deps missing — run: make bridge-setup"
-  [ -f "$bridge/manifest.json" ] && ok "bridge manifest rendered" \
-    || warn "bridge manifest not rendered — run: make bridge-setup (npm run setup)"
-}
-
 check_watch_token() {
   local tok_cmd
   tok_cmd="$(python3 "$DAIMON_LIB_DIR/config.py" env slack-channel-watch 2>/dev/null \
@@ -145,11 +151,9 @@ check_watch_token() {
   fi
 }
 
-if [ -d "$DAIMON_INSTALL_ROOT/bridges/env-bridge" ]; then
-  echo "slack bridge"
+if cfg daemons | grep -qx slack-commands; then
+  echo "slack commands"
   check_slack_mcp
-  check_bridge_toolchain
-  check_bridge_project
   check_watch_token
 fi
 
@@ -171,7 +175,7 @@ if [ "$needs_mongodb" = 1 ]; then
   echo "mongodb"
   source "$DAIMON_INSTALL_ROOT/profiles/mongodb/lib.sh"
   if [ -z "$(atlas_creds)" ]; then
-    warn "no Atlas service account (\$ATLAS_CLIENT_ID/\$ATLAS_CLIENT_SECRET, ~/.config/daimon/atlas.env, or the MongoDB MCP server) — mongodb gate fails closed, so the daemon never fires"
+    warn "no Atlas service account (\$ATLAS_CLIENT_ID/\$ATLAS_CLIENT_SECRET, $DAIMON_PERSONAL_DIR/atlas.env, or the MongoDB MCP server) — mongodb gate fails closed, so the daemon never fires"
   elif [ -n "$(atlas_token)" ]; then
     ok "Atlas service account authenticates"
   else
@@ -199,6 +203,26 @@ if [ "$needs_acr" = 1 ]; then
 $acr_dirs
 EOF
   fi
+fi
+
+# Ejected copies (yours, and packs') whose upstream changed since the copy:
+# not a problem, just fixes you may want to fold in.
+outdated="$(PYTHONPATH="$DAIMON_LIB_DIR/.." python3 -m daimon.eject outdated --brief 2>/dev/null)"
+if [ -n "$outdated" ]; then
+  echo "ejected daemons"
+  while IFS= read -r line; do note "$line — see: daimon diff ${line%% *}"; done <<<"$outdated"
+fi
+
+echo "updates"
+if [ "$(cfg get update.auto)" = 1 ]; then
+  launchctl print "gui/$(id -u)/com.${DAIMON_NS}.update" >/dev/null 2>&1 \
+    && ok "auto-update on (com.${DAIMON_NS}.update loaded)" \
+    || warn "auto-update on but com.${DAIMON_NS}.update isn't loaded: run daimon sync"
+  [ -e "$DAIMON_PERSONAL_DIR/no-auto-update" ] && warn "opted out on this machine ($DAIMON_PERSONAL_DIR/no-auto-update)"
+  last="$(tail -1 "$(logs_dir)/update.log" 2>/dev/null | sed 's/.*msg="//; s/"$//')"
+  [ -n "$last" ] && ok "last check: $last"
+else
+  ok "auto-update off ([update].auto)"
 fi
 
 echo ""

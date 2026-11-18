@@ -22,7 +22,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-          code="$(printf '%s\n' "$files" | grep -E '^(lib|daemons|backends|tui|daimon)/' || true)"
+          code="$(printf '%s\n' "$files" | grep -E '^(lib|catalog|backends|tui|daimon)/' || true)"
           docs="$(printf '%s\n' "$files" | grep -E '(^docs/|(^|/)README\.md$|^AGENTS\.md$|^CONTRIBUTING\.md$)' || true)"
           if [ -n "$code" ] && [ -z "$docs" ]; then
             echo "::warning::Code changed but no docs were updated — confirm README / CONTRIBUTING / docs/ are still accurate. Reminder only, not a failure."

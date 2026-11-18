@@ -48,7 +48,7 @@ class ProfileTest(unittest.TestCase):
             root / "profiles" / "sc" / "reference.md", "REF-MARKER labels: {{inputs.ready_label}}"
         )
         write(
-            root / "daemons" / "wq" / "daemon.toml",
+            root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             source = "sc"
@@ -60,7 +60,7 @@ class ProfileTest(unittest.TestCase):
         """,
         )
         write(
-            root / "daemons" / "wq" / "skill" / "SKILL.md",
+            root / "catalog" / "wq" / "skill" / "SKILL.md",
             "ready={{inputs.ready_label}} ws={{inputs.workspace}} repos={{inputs.repos}}\n",
         )
         os.environ["DAIMON_CONFIG"] = str(root / "config" / "daimon.toml")
@@ -78,7 +78,7 @@ class ProfileTest(unittest.TestCase):
 
     def test_daemon_inputs_override_profile(self):
         write(
-            self.root / "daemons" / "wq" / "daemon.toml",
+            self.root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             source = "sc"
@@ -99,7 +99,7 @@ class ProfileTest(unittest.TestCase):
 
     def test_daemon_local_overrides_committed(self):
         write(
-            self.root / "daemons" / "wq" / "daemon.local.toml",
+            self.root / "catalog" / "wq" / "daemon.local.toml",
             '[daemon]\nworking_dir = "~/x"\n[inputs]\nrepos = ["hub"]\n',
         )
         d = config.Config.load().daemon("wq")
@@ -107,16 +107,17 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(d["inputs"]["repos"], ["hub"])
 
     def test_update_local_does_not_touch_committed(self):
-        committed = self.root / "daemons" / "wq" / "daemon.toml"
+        committed = self.root / "catalog" / "wq" / "daemon.toml"
         before = committed.read_text()
         self.cfg.update_local("wq", {"stuck_after": 999}, None)
         self.assertEqual(committed.read_text(), before)
-        local = self.root / "daemons" / "wq" / "daemon.local.toml"
+        local = self.root / "config" / "daemons" / "wq.toml"
         self.assertIn("999", local.read_text())
+        self.assertFalse((self.root / "catalog" / "wq" / "daemon.local.toml").exists())
         self.assertEqual(config.Config.load().daemon("wq")["stuck_after"], 999)
 
     def test_render_appends_reference_and_joins_lists(self):
-        write(self.root / "daemons" / "wq" / "daemon.local.toml", '[inputs]\nrepos = ["a", "b"]\n')
+        write(self.root / "catalog" / "wq" / "daemon.local.toml", '[inputs]\nrepos = ["a", "b"]\n')
         out = config.render_skill(config.Config.load(), "wq")
         self.assertIn("REF-MARKER", out)
         self.assertIn("repos=a, b", out)
@@ -128,7 +129,7 @@ class ProfileTest(unittest.TestCase):
     def test_write_source_appends_write_reference(self):
         write(self.root / "profiles" / "sc" / "reference.write.md", "WRITE-MARKER")
         write(
-            self.root / "daemons" / "wq" / "daemon.toml",
+            self.root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             sources = [{ name = "sc", write = true }]
@@ -165,7 +166,7 @@ class ProfileTest(unittest.TestCase):
         )
         write(self.root / "profiles" / "gh" / "reference.md", "GH-MARKER base {{inputs.base}}")
         write(
-            self.root / "daemons" / "wq" / "daemon.toml",
+            self.root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             sources = ["sc", "gh"]
@@ -186,7 +187,7 @@ class ProfileTest(unittest.TestCase):
 
     def test_validate_flags_unknown_among_multiple_sources(self):
         write(
-            self.root / "daemons" / "wq" / "daemon.toml",
+            self.root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             sources = ["sc", "nope"]
@@ -199,7 +200,7 @@ class ProfileTest(unittest.TestCase):
 
     def test_validate_unknown_profile(self):
         write(
-            self.root / "daemons" / "wq" / "daemon.toml",
+            self.root / "catalog" / "wq" / "daemon.toml",
             """
             [daemon]
             source = "nope"

@@ -18,6 +18,20 @@ A backend must define these functions:
 | `backend_completion_mode` | — | `hook` (a Stop-hook touches the sentinel; precise), `idle` (no hook; completion inferred from heartbeat staleness), or `oneshot` (see below). |
 | `backend_exhausted_regex` | — | Case-insensitive transcript regex that matches only provider-capacity exhaustion. This is the sole condition that permits `fallback_backend`; keep it narrower than ordinary errors or advisory limit text. |
 
+Optionally, `backend_supports_resume` (returns 0) declares that the CLI can
+continue an earlier session by id; see below.
+
+## Resuming a session
+
+A gate can ask to continue an earlier agent session instead of starting fresh, so
+the agent keeps the context it built (see `$DAIMON_GATE_RESUME` in
+docs/writing-a-daemon.md). When the backend declares `backend_supports_resume`,
+the launcher sets `DAIMON_AGENT_SESSION` to that session's id and
+`DAIMON_RESUME=1`, and `backend_cli_args` emits the CLI's resume flag in place of
+its new-session flag. The command typed into the session is the one the gate
+asked for. A backend without resume support starts a fresh session and runs that
+command.
+
 ## Capacity fallback
 
 Set `fallback_backend = "codex"` under global `[defaults]` or a daemon's

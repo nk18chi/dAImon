@@ -24,11 +24,21 @@ TUI is the control panel.
   <img src="assets/tui.png" alt="dAImon control panel — daemon list with live status, config, processes, and log" width="900">
 </p>
 
+> **Upgrading from before the catalog (Nov 2026)?** Your next `daimon install` migrates you automatically; see [docs/migrating.md](docs/migrating.md) for what moved and the few cases that need you.
+
 ## Concepts
 
-- **Daemon** — a self-contained folder `daemons/<slug>/` with `daemon.toml`
+- **Daemon** — a self-contained folder `<slug>/` with `daemon.toml`
   (settings + task `[inputs]`), `discover.sh` (a gate: should this fire do work?),
-  and `skill/SKILL.md` (the prompt). Auto-discovered; drop one in and it exists.
+  and `skill/SKILL.md` (the prompt).
+- **Catalog** — the daemons you can install: dAImon's own `catalog/`, plus each
+  [pack](docs/packs.md)'s `daemons/`. dAImon is the shell; you pick daemons from a
+  catalog with `daimon add` ([docs/catalog.md](docs/catalog.md)). Installing
+  schedules nothing: registering a daemon (a launchd job) is a separate step.
+  Your own daemons live in `daemons/`, gitignored, and are always installed.
+  An installed daemon is linked (it runs from its catalog, so updates reach it)
+  until you `daimon eject` it into `daemons/` to edit; `daimon outdated` and
+  `daimon diff` then show what changed upstream since.
 - **Backend** — the agent CLI that drives the session. Claude and Codex ship
   today; provider-specific capacity classifiers allow an opt-in Codex fallback
   only when Claude is actually capped. Backends remain pluggable via
@@ -59,14 +69,14 @@ macOS: `brew install python@3.12 tmux gh jq` (plus the [Claude CLI](https://docs
 ```bash
 git clone <your-fork> ~/dev/dAImon
 cd ~/dev/dAImon
-make install                 # hooks, TUI venv, skills, plists (not scheduled); puts `daimon` on PATH
-cd /path/to/your-target-repo # repo the daemon should operate on
-daimon init review-prs       # pick daemons + accept/change the working_dir prompt
-$EDITOR ~/.config/daimon/daimon.toml                       # optional globals: state_dir, defaults
+make install                 # the shell: hooks, TUI venv, skills; puts `daimon` on PATH; installs no daemon
+daimon catalog               # every daemon you can install, and where it comes from
+daimon add review-prs        # install one: scaffolds ~/.daimon/daemons/review-prs.toml, syncs
+$EDITOR ~/.daimon/daemons/review-prs.toml   # working_dir = the repo it operates on
 daimon doctor                # verify tools, gh auth, hooks, config
 daimon validate
 daimon run review-prs        # one gated run, now — watch with `daimon tui`
-daimon install --load        # schedule everything via launchd (macOS only)
+daimon tui                   # select it and press r to register (schedule) it via launchd (macOS only)
 ```
 
 `make install` symlinks `daimon`/`daimonctl` into `~/.local/bin` (ensure it's on your
@@ -75,22 +85,28 @@ PATH); `make help` lists targets.
 ### Shared vs machine-local config
 
 Each daemon splits its config in two: **`daemon.toml`** (committed — shared defaults,
-schedule, task inputs) and **`daemon.local.toml`** (gitignored — your `working_dir`
-and any per-machine overrides). Edit the `.local.toml` copies and never commit them.
-Source-wide settings (e.g. your Shortcut `owner`/`team`) live the same way in
-`profiles/<name>/profile.local.toml`. API tokens are never stored in these files —
-use `gh auth login` and `$SHORTCUT_API_TOKEN`.
+schedule, task inputs) and **`~/.daimon/daemons/<slug>.toml`** (outside the
+repo — your `working_dir` and any per-machine overrides). Source-wide settings (e.g.
+your Shortcut `owner`/`team`) live the same way in
+`~/.daimon/profiles/<name>.toml`. Older installs kept these as gitignored
+`*.local.toml` files in the repo; those are still read, and `daimon install` (every
+update) moves them for you — or run `daimon migrate`
+([details](docs/configuration.md#local-overrides-keep-your-config-out-of-git)). API
+tokens are never stored in these files — use `gh auth login` and
+`$SHORTCUT_API_TOKEN`.
 
-`daimon init` defines which daemons run on this machine: name the ones you want and
-the rest are added to `[daemons].disabled` (excluded from sync and scheduling), and
-the chosen ones get their `.local.toml` scaffolded from the tracked examples. It
-prompts once for `working_dir`, defaulting to the current directory; press Enter to
-use it for all selected daemons with placeholder paths, or type a different repo or
-workspace path.
+`daimon add <slug>…` installs daemons one at a time; `daimon init` chooses the
+whole set at once. Name the ones you want and they become `[daemons].installed`
+in `daimon.toml`; the chosen ones get their settings in `~/.daimon/`
+scaffolded from the tracked `*.local.toml.example` files. It prompts once for
+`working_dir`, defaulting to the current directory; press Enter to use it for all
+selected daemons with placeholder paths, or type a different repo or workspace
+path. Neither registers anything: `r` in `daimon tui` does.
 
 ```bash
-daimon init story-reviewer reply-to-story-comments   # run only these two
-daimon init                                          # interactive picker (default: all)
+daimon init story-reviewer reply-to-story-comments   # install exactly these two
+daimon init                                          # interactive multi-select from the catalog
+daimon remove story-reviewer                         # unregister + uninstall (settings kept)
 ```
 
 ## Daemons
@@ -105,31 +121,47 @@ The reference daemons cover the development lifecycle end to end:
 - **pr-manager** — shepherd approved PRs to merge (resolve conflicts, fix CI,
   handle change requests).
 
-They're reference implementations — run the ones you want (`daimon init <slug>…`) or
-copy one as a starting point. See the [daemons index](daemons/README.md) for each
-daemon's schedule, inputs, and config (every daemon has its own generated README).
+They're reference implementations in dAImon's catalog — install the ones you want
+(`daimon add <slug>…`) or copy one as a starting point. See the
+[catalog index](catalog/README.md) for each daemon's schedule, inputs, and config
+(every daemon has its own generated README).
 
 ## Adding a daemon
 
-Two ways, both producing the same `daemons/<slug>/` folder:
+Three ways, all producing a `<slug>/` folder in your own `daemons/` (gitignored,
+active at once) or, with `--pack`, a [pack](docs/packs.md)'s. Team-specific
+daemons belong in a pack; `--catalog` (scaffold only) is for a generic daemon you
+mean to contribute to dAImon:
 
-1. **Interactive** — run `/daimon-builder` in Claude; it interviews you and writes
-   the folder.
-2. **By hand** — copy an existing `daemons/<slug>/`, edit `daemon.toml`, then
-   `daimon sync` to regenerate its plist and render its skill.
+1. **Interactive:** `daimon new [--pack]` opens `/daimon-builder` in Claude. It
+   interviews you, scaffolds the folder and writes it.
+2. **Skeleton:** `daimon scaffold <slug> [--pack [dir] | --catalog]` writes `daemon.toml`,
+   `skill/SKILL.md` and a gate that skips until you write it, so nothing runs
+   half-finished. Fill them in following [writing a daemon](docs/writing-a-daemon.md).
+3. **By hand:** copy an existing daemon folder and edit it.
+
+Then (`daimon add <slug>` for one in a pack or the catalog) `daimon validate`,
+`daimon run <slug>` to try it once, and `daimon sync`.
 
 ## CLI
 
 ```
 daimon run <slug>        gated run (throttle/inbox/discovery) then launch
 daimon launch <slug>     launch now, bypass gates
-daimon daemons           list discovered daemons
+daimon catalog           every daemon you can install: source, installed/ejected
+daimon add <slug>…       install (+ personal settings, sync); registers nothing
+daimon remove <slug>…    unregister (asks if loaded; --yes) + uninstall
+daimon eject <slug>      copy into daemons/ to edit (--pack: into your pack)
+daimon outdated          ejected copies whose upstream or copy changed
+daimon diff <slug>       diff -ru upstream against your copy
+daimon uneject <slug>    delete your copy; the daemon is linked again
+daimon daemons           list active daemons (installed + your own, minus disabled)
 daimon status            launchd + running-session state
 daimon models <backend>  available models (live API or bundled fallback)
 daimon mcp setup slack   create/connect Codex fallback to Slack via OAuth
 daimon mcp share slack   print the setup command for teammates
 daimon config <args>     config core (validate|get|daemon|schedule|...)
-daimon sync              regenerate plists + render skills
+daimon sync              regenerate plists + render skills (reloads changed, idle jobs)
 daimon kill <slug|all>   hard-kill a run
 daimon ps <slug|all>     process tree
 daimon watchdog          sweep orphans + leaked MCP + old logs
@@ -140,8 +172,8 @@ daimon tui               control panel
 
 ## Configuration
 
-Global settings in `~/.config/daimon/daimon.toml`; per-daemon in
-`daemons/<slug>/daemon.toml`. Full field reference: [docs/configuration.md](docs/configuration.md).
+Global settings in `~/.daimon/daimon.toml`; per-daemon in
+`<slug>/daemon.toml` in its catalog, and yours in `~/.daimon/daemons/<slug>.toml`. Full field reference: [docs/configuration.md](docs/configuration.md). Share a team setup from its own repo: [docs/packs.md](docs/packs.md).
 Run-dangerous, model, schedule, backend, capacity fallback, and idle timeout are
 all configurable globally and per daemon. Set `fallback_backend = "codex"` under
 `[defaults]` to fall back fleet-wide only when Claude reports a provider cap.
@@ -169,7 +201,8 @@ and bash syntax across all libs.
 
 ## Layout
 
-`lib/` framework · `backends/` agent CLIs · `daemons/` the daemons · `daimon/`
+`lib/` framework · `backends/` agent CLIs · `catalog/` dAImon's daemons ·
+`daemons/` your own (gitignored) · `daimon/`
 sync (plists + skills) · `tui/` control panel · `skills/` management commands ·
 `config/` defaults + hooks · `docs/`.
 
@@ -178,7 +211,7 @@ sync (plists + skills) · `tui/` control panel · `skills/` management commands 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup and workflow,
 [docs/writing-a-daemon.md](docs/writing-a-daemon.md) to build your own daemon,
 and [docs/slack-commands.md](docs/slack-commands.md) to drive your environment
-from Slack (`?epic-status 48227`) and write your own command plugins.
+from Slack (`?pr-status 42`) and write your own command plugins.
 
 ## License
 
