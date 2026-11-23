@@ -28,7 +28,9 @@
 2. Gates: throttle → inbox → `discover.sh` (exit 0 to proceed).
 3. `launch.sh` opens a detached tmux session in the daemon's `working_dir`,
    running the primary backend CLI with the configured model and danger flag.
-4. It waits for the ready banner, types the daemon's `command`, then blocks.
+4. It starts the agent with the daemon's `command` as its first prompt (`claude`),
+   or waits for the ready banner and types the `command` (backends that can't take
+   one at start-up), then blocks.
 5. Completion: a sentinel file (Claude's Stop hook), or heartbeat-idle for a
    backend with no such hook. No wall-clock cap — only `stuck_after` seconds of silence.
 6. The pane scrollback is saved as a transcript. If the backend-specific capacity

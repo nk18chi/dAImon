@@ -40,3 +40,8 @@ ensure_state_dirs() {
 }
 
 now_epoch() { date +%s; }
+
+# initial_prompt_word <command> -> the command as one shell word, for a backend
+# that takes its first prompt on the command line. tmux runs the launch line
+# through a shell, so a resume command with spaces or quotes must stay one argv.
+initial_prompt_word() { printf '%q' "$1"; }

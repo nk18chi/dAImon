@@ -31,7 +31,7 @@ Inherited by every daemon; a daemon's `[daemon]` block overrides any field.
 | `model` | string | `opus` | Passed to the backend as its model flag. |
 | `danger` | bool | `true` | Allow the backend to skip its permission/approval prompts (run-dangerous). |
 | `stuck_after` | int (sec) | `2700` | Idle-gap reaper. A run is killed only after this many seconds with **no agent activity** (heartbeat stale). This is **not** a max runtime — healthy runs may last hours. |
-| `ready_timeout` | int (sec) | `20` | How long to wait for the backend's ready banner before driving input. |
+| `ready_timeout` | int (sec) | `20` | How long to wait for the backend's ready banner before driving input. Unused by `claude`, which gets the command at start-up. |
 | `mcp` | string[] | `[]` | MCP servers to attach to daemon sessions (opt-in). Known: `codex`. Requires `danger = true`. Set here for fleet-wide, or per-daemon under `[daemon]`. |
 
 ### `[throttle]`

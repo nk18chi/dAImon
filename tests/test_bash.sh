@@ -105,6 +105,25 @@ export DAIMON_AGENT_SESSION="0f0e0d0c-0000-4000-8000-000000000001"
 case "$(backend_cli_args opus 1 sess)" in *"--session-id $DAIMON_AGENT_SESSION"*) sid=1;; *) sid=0;; esac
 check "$sid" "1" "claude backend pins --session-id when DAIMON_AGENT_SESSION is set"
 unset DAIMON_AGENT_SESSION
+# The command goes in at start-up, not typed once the pane shows a ready banner
+# whose text depends on the user's permission mode.
+if backend_initial_prompt; then ip=1; else ip=0; fi
+check "$ip" "1" "claude backend takes the command as its first prompt"
+# It must reach the CLI as one argv word after tmux's shell, quotes and all.
+for c in "/review-prs" "/pr-manager resume 'PR 12' now"; do
+  w="$(sh -c "printf '%s\n' $(initial_prompt_word "$c")")"
+  check "$w" "$c" "initial prompt survives the launch shell as one word: $c"
+done
+# An untrusted working_dir fails before launch, with the reason, instead of the
+# command waiting behind claude's trust prompt.
+mkdir -p "$TMP/trusthome" "$TMP/wd-trusted" "$TMP/wd-untrusted"
+printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$(cd "$TMP/wd-trusted" && pwd -P)" > "$TMP/trusthome/.claude.json"
+if HOME="$TMP/trusthome" backend_launch_check "$TMP/wd-trusted" >/dev/null; then t=1; else t=0; fi
+check "$t" "1" "claude launch check passes a trusted working_dir"
+if r="$(HOME="$TMP/trusthome" backend_launch_check "$TMP/wd-untrusted")"; then t=1; else t=0; fi
+check "$t" "0" "claude launch check fails an untrusted working_dir"
+case "$r" in *"not trusted by claude"*) t=1;; *) t=0;; esac
+check "$t" "1" "claude launch check says why"
 
 # The Stop hook marks done only for the daemon's own session, never for a child
 # `claude -p` that a user hook spawns with the same env.

@@ -41,6 +41,8 @@ pane_heartbeat() {  # session heartbeat — touch heartbeat whenever the pane ch
 
 run_one_backend() {
   local be="$1"
+  # Optional hooks: a fallback backend must not inherit the primary's.
+  unset -f backend_initial_prompt backend_launch_check
   # shellcheck source=/dev/null
   source "$DAIMON_INSTALL_ROOT/backends/$be.sh"
   local model session model_var
@@ -60,6 +62,15 @@ run_one_backend() {
   if tmux has-session -t "$session" 2>/dev/null; then
     log_event "$SLUG" skip "session $session already running" >> "$OPLOG"
     return 0
+  fi
+
+  # A CLI that would stop at a start-up dialog (claude's folder-trust prompt)
+  # fails here with the reason, rather than its command waiting behind the dialog
+  # until the stuck_after reaper ends the run.
+  local blocked
+  if declare -F backend_launch_check >/dev/null && ! blocked="$(backend_launch_check "$WORKING_DIR")"; then
+    log_event "$SLUG" boot_fail "backend=$be session=$session $blocked" >> "$OPLOG"
+    return 1
   fi
 
   local HBPID="" PROMPTF=""
@@ -96,9 +107,15 @@ run_one_backend() {
     cfg render-skill "$SLUG" > "$PROMPTF"
     stdin="< '$PROMPTF'"
   fi
+  # A backend that takes its first prompt on the command line gets the command
+  # there (see backend_initial_prompt), so nothing waits on the pane's text.
+  local initial=0 prompt=""
+  if [ "$mode" != "oneshot" ] && declare -F backend_initial_prompt >/dev/null && backend_initial_prompt; then
+    initial=1; prompt="$(initial_prompt_word "$COMMAND")"
+  fi
   local tfile; tfile="$(transcripts_dir)/${SLUG}-${be}-$(date -u +%Y%m%dT%H%M%SZ).log"
   tmux new-session -d -s "$session" -c "$WORKING_DIR" -x 220 -y 50 \
-    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_AGENT_SESSION='$DAIMON_AGENT_SESSION' DAIMON_RESUME='$DAIMON_RESUME' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin"
+    "PATH=\"$DAIMON_INSTALL_ROOT/bin:\$PATH\" DAIMON_SENTINEL='$SENTINEL' DAIMON_HEARTBEAT='$HEARTBEAT' DAIMON_WAIT='$WAITF' DAIMON_STATE_DIR='$DAIMON_STATE_DIR' DAIMON_SLUG='$SLUG' DAIMON_AGENT_SESSION='$DAIMON_AGENT_SESSION' DAIMON_RESUME='$DAIMON_RESUME' DAIMON_STATE_FILE='$DAIMON_STATE_DIR/state/$SLUG.json' exec '$bin' $args $stdin $prompt"
   tmux set-option -t "$session" prefix2 C-a 2>/dev/null || true
   # A oneshot process can exit before the completion loop's final capture, so
   # stream the pane to the transcript live instead of grabbing it at the end.
@@ -110,6 +127,11 @@ run_one_backend() {
   local regex booted=0 i
   regex="$(backend_ready_regex "$DANGER")"
   if [ "$mode" = "oneshot" ]; then
+    tmux has-session -t "$session" 2>/dev/null && booted=1
+  elif [ "$initial" = "1" ]; then
+    # Nothing to wait for: the CLI runs the command once it is up. A short grace
+    # still catches one that exits at once (bad flag, broken install).
+    sleep 2
     tmux has-session -t "$session" 2>/dev/null && booted=1
   elif [ -n "$regex" ]; then
     for (( i=0; i<READY_TIMEOUT; i++ )); do
@@ -128,11 +150,16 @@ run_one_backend() {
     return 1
   fi
 
-  rm -f "$SENTINEL" "$WAITF"; : > "$HEARTBEAT"
+  # With the command passed at start-up the agent is already working, and a
+  # sentinel it writes now is its real completion: keep it.
+  [ "$initial" = "1" ] || rm -f "$SENTINEL" "$WAITF"
+  : > "$HEARTBEAT"
   if [ "$mode" = "oneshot" ]; then
     log_event "$SLUG" running "backend=$be oneshot" >> "$OPLOG"
   else
-    tmux send-keys -t "$session" "$COMMAND"; sleep 0.5; tmux send-keys -t "$session" Enter
+    if [ "$initial" != "1" ]; then
+      tmux send-keys -t "$session" "$COMMAND"; sleep 0.5; tmux send-keys -t "$session" Enter
+    fi
     log_event "$SLUG" running "backend=$be command=$COMMAND" >> "$OPLOG"
   fi
   # Now working: report in the background so the run never waits on it.

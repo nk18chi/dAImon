@@ -23,6 +23,23 @@ backend_ready_regex() {  # 1 if danger -> bypass banner, else the idle input pro
   if [ "${1:-1}" = "1" ]; then echo "bypass permissions"; else echo "for shortcuts"; fi
 }
 
+# Claude takes the daemon's command as its first prompt (`claude … '/cmd'`), so
+# the launcher passes it at start-up instead of typing it once the pane looks
+# ready. The idle-prompt text backend_ready_regex matches depends on the user's
+# permission mode ("? for shortcuts" by default, "auto mode on" under
+# `permissions.defaultMode: auto`) and changes between Claude Code releases; a
+# miss there boot_fails every run without the command ever being sent.
+backend_initial_prompt() { return 0; }
+
+# Claude stops at "Do you trust this folder?" in any folder it has no trust
+# decision for (danger mode included), and the start-up command waits behind it.
+# Trust is per exact folder: a trusted parent does not cover it.
+backend_launch_check() {  # working_dir -> reason on stdout, return 1 when start-up would block
+  python3 "$DAIMON_LIB_DIR/claude_trust.py" "$1" 2>/dev/null && return 0
+  echo "working_dir not trusted by claude: $1 (open claude there once and accept the trust prompt)"
+  return 1
+}
+
 backend_completion_mode() { echo "hook"; }
 
 # Can continue an earlier session by id (see "Resuming a session" in README.md).
