@@ -32,6 +32,11 @@ reviewers = []
 # review. Off by default: unreviewed AI-authored code reaching the base branch is
 # a deliberate choice. promote_min_age_hours stays the human intervention window.
 auto_merge = false
+# A managed PR carrying this label is repaired (conflicts, failing CI, review
+# feedback, reviewers, promotion) but never merged, approved or not: a person
+# merges it. For PRs another daemon opens where the team wants a human to press
+# merge. Blank = no such label.
+no_merge_label = ""
 # Optional business-hours merge window. Leave all three blank to merge any time
 # CI is green. Set all three to gate ONLY the merge action (conflict and CI
 # fixes always run). e.g. tz = "America/Toronto", start = "9", end = "21".

@@ -20,7 +20,7 @@ setup() {
 #!/usr/bin/env bash
 case "\$*" in
   "api user --jq .login") echo me ;;
-  "pr list"*) echo '[{"number":7,"headRefName":"daimon/sc-1","reviewDecision":"'"\${DECISION:-REVIEW_REQUIRED}"'","mergeable":"MERGEABLE","isDraft":false,"labels":[],"statusCheckRollup":[{"conclusion":"SUCCESS"}],"createdAt":"2026-01-01T00:00:00Z","reviewRequests":[],"latestReviews":[]}]' ;;
+  "pr list"*) echo '[{"number":7,"headRefName":"daimon/sc-1","reviewDecision":"'"\${DECISION:-REVIEW_REQUIRED}"'","mergeable":"MERGEABLE","isDraft":false,"labels":'"\${LABELS:-[]}"',"statusCheckRollup":[{"conclusion":"'"\${CHECK:-SUCCESS}"'"}],"createdAt":"2026-01-01T00:00:00Z","reviewRequests":[],"latestReviews":[]}]' ;;
   "pr view 7 --json reviews,comments") cat "$T/feedback.json" ;;
   "pr view 7 --json body --jq .body") printf 'Implements x\n\n<!-- daimon-session: $SID -->\n' ;;
 esac
@@ -87,5 +87,35 @@ gate() { cd "$T/repo" && DAIMON_INSTALL_ROOT="$ROOT" bash "$ROOT/catalog/pr-mana
 @test "an approved PR with no pending feedback still launches to merge" {
   echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
   DECISION=APPROVED run gate
+  [ "$status" -eq 0 ]
+}
+
+@test "an approved PR carrying the no-merge label does not launch to merge" {
+  echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
+  DAIMON_INPUT_NO_MERGE_LABEL=human-merge LABELS='[{"name":"human-merge"}]' DECISION=APPROVED run gate
+  [ "$status" -ne 0 ]
+}
+
+@test "auto_merge does not launch for a no-merge PR either" {
+  echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
+  DAIMON_INPUT_AUTO_MERGE=1 DAIMON_INPUT_NO_MERGE_LABEL=human-merge LABELS='[{"name":"human-merge"}]' run gate
+  [ "$status" -ne 0 ]
+}
+
+@test "a no-merge PR with failing CI still launches to repair it" {
+  echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
+  DAIMON_INPUT_NO_MERGE_LABEL=human-merge LABELS='[{"name":"human-merge"}]' CHECK=FAILURE run gate
+  [ "$status" -eq 0 ]
+}
+
+@test "a no-merge PR with change requests still launches to address them" {
+  echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
+  DAIMON_INPUT_NO_MERGE_LABEL=human-merge LABELS='[{"name":"human-merge"}]' DECISION=CHANGES_REQUESTED run gate
+  [ "$status" -eq 0 ]
+}
+
+@test "the no-merge label set but absent from the PR: merges as before" {
+  echo '{"reviews":[],"comments":[]}' > "$T/feedback.json"
+  DAIMON_INPUT_NO_MERGE_LABEL=human-merge DECISION=APPROVED run gate
   [ "$status" -eq 0 ]
 }

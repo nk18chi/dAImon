@@ -76,6 +76,11 @@ Promotion does **not** merge — the PR still needs an approving review to reach
 
 ### 3.1 Merge
 
+**Repair only:** the no-merge label is `{{inputs.no_merge_label}}` (blank = none).
+Never merge a PR carrying it, approved or not, and never remove the label: a
+person merges that PR. Skip this section for it and go on to §3.2–3.5, which
+still apply.
+
 Never merge a PR with **unhandled review feedback** (§3.4); handle it first.
 Merge when all checks pass (no FAILURE/PENDING in `statusCheckRollup`),
 `mergeable != "CONFLICTING"`, it is not a draft, and **either**:

@@ -9,6 +9,8 @@
 # "Managed" = a PR you authored on a daimon/* branch, or any PR carrying the
 # manage label. Runs inside working_dir, so gh targets the current repo. Failing
 # closed (no gh, no auth) means "skip", the safe default.
+# A PR carrying no_merge_label is never "ready to merge": it launches a run only
+# for repairs, feedback, promotion or reviewers.
 set -uo pipefail
 
 # dAImon exports this when it runs the gate; fall back to the `daimon` on PATH.
@@ -61,6 +63,7 @@ done
 printf '%s' "$prs" | jq -e \
   --argjson deferred "[$deferred]" \
   --arg label "$DAIMON_INPUT_MANAGE_LABEL" \
+  --arg nomerge "${DAIMON_INPUT_NO_MERGE_LABEL:-}" \
   --arg reviewers "$DAIMON_INPUT_REVIEWERS" \
   --argjson promote "$DAIMON_INPUT_PROMOTE_DRAFTS" \
   --argjson automerge "$DAIMON_INPUT_AUTO_MERGE" \
@@ -76,10 +79,12 @@ printf '%s' "$prs" | jq -e \
   def green: ((checks | length) > 0) and (failing | not) and (pending | not);
   def age_hours: (now - (.createdAt | fromdateiso8601)) / 3600;
   def seen: ([.reviewRequests[]?.login] + [.latestReviews[]?.author.login]);
+  def no_merge: $nomerge != "" and ([.labels[].name] | index($nomerge) != null);
   def actionable_ready: (.isDraft | not) and (
-    (.reviewDecision == "APPROVED" and green) or
-    ($automerge == 1 and green and .reviewDecision != "CHANGES_REQUESTED"
-      and .mergeable != "CONFLICTING") or
+    ((no_merge | not) and (
+      (.reviewDecision == "APPROVED" and green) or
+      ($automerge == 1 and green and .reviewDecision != "CHANGES_REQUESTED"
+        and .mergeable != "CONFLICTING"))) or
     (.reviewDecision == "CHANGES_REQUESTED"));
   def needs_repair: (.mergeable == "CONFLICTING") or failing;
   def promotable_draft: ($promote == 1) and .isDraft and green
