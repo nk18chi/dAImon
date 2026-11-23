@@ -101,6 +101,32 @@ export DAIMON_MCP_CONFIG="$TMP/mcp.json"
 case "$(backend_cli_args opus 1 sess)" in *"--mcp-config $TMP/mcp.json --strict-mcp-config"*) mcp=1;; *) mcp=0;; esac
 check "$mcp" "1" "claude backend appends --mcp-config + --strict when set"
 unset DAIMON_MCP_CONFIG
+export DAIMON_D_TOOLS="Read 'Bash(git log:*)'" DAIMON_RESTRICTED_DIR="/tmp/r"
+A="$(backend_cli_args opus 1 sess)"
+case "$A" in *--dangerously-skip-permissions*) d=1;; *) d=0;; esac
+check "$d" "0" "claude tools allowlist overrides danger"
+case "$A" in *"--permission-mode dontAsk"*) d=1;; *) d=0;; esac
+check "$d" "1" "claude tools allowlist runs dontAsk"
+# each rule must reach claude as one argv word after tmux's `sh -c`. grep reads
+# all its input (no -q): an early exit would SIGPIPE printf and fail pipefail.
+if sh -c "printf '%s\n' $A" | grep -xF 'Bash(git log:*)' >/dev/null; then t=1; else t=0; fi
+check "$t" "1" "claude allowlist rule survives sh -c as one word"
+# no settings file may load: the user's own allow rules would widen the list
+if sh -c "printf '[%s]\n' $A" | grep -A1 -xF '[--setting-sources]' | grep -xF '[]' >/dev/null; then t=1; else t=0; fi
+check "$t" "1" "claude allowlist loads no settings files"
+case "$A" in *"--settings '/tmp/r/settings.json' --mcp-config '/tmp/r/mcp.json' --strict-mcp-config"*) d=1;; *) d=0;; esac
+check "$d" "1" "claude allowlist takes hooks and MCP only from the restricted dir"
+# user skills don't load either; the daemon's own skill comes in as a plugin
+case "$A" in *"--plugin-dir '/tmp/r/plugin'"*) d=1;; *) d=0;; esac
+check "$d" "1" "claude allowlist loads the daemon skill from the restricted dir"
+check "$(backend_ready_regex 1)" "don't ask on" "claude ready banner follows dontAsk"
+export DAIMON_MCP_CONFIG="$TMP/mcp.json"
+case "$(backend_cli_args opus 1 sess)" in *"$TMP/mcp.json"*) mcp=1;; *) mcp=0;; esac
+check "$mcp" "0" "claude allowlist ignores the daemon mcp config"
+unset DAIMON_D_TOOLS DAIMON_RESTRICTED_DIR DAIMON_MCP_CONFIG
+case "$(backend_cli_args opus 1 sess)" in *--dangerously-skip-permissions*) d=1;; *) d=0;; esac
+check "$d" "1" "claude without tools still runs danger"
+check "$(backend_ready_regex 1)" "bypass permissions" "claude danger banner without tools"
 export DAIMON_AGENT_SESSION="0f0e0d0c-0000-4000-8000-000000000001"
 case "$(backend_cli_args opus 1 sess)" in *"--session-id $DAIMON_AGENT_SESSION"*) sid=1;; *) sid=0;; esac
 check "$sid" "1" "claude backend pins --session-id when DAIMON_AGENT_SESSION is set"

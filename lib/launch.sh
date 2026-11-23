@@ -90,6 +90,17 @@ run_one_backend() {
   fi
   export DAIMON_MCP_CONFIG="$mcp_file"
 
+  # A tools allowlist runs with no settings files at all; build the hooks,
+  # allowlisted-MCP, and skill-plugin files it starts from instead (see
+  # restricted_claude.py). The skill folder is named after the command.
+  local restricted="" warn
+  if [ -n "${DAIMON_D_TOOLS:-}" ]; then
+    restricted="$(restricted_dir "$SLUG")"
+    warn="$(DAIMON_D_TOOLS="$DAIMON_D_TOOLS" python3 "$DAIMON_LIB_DIR/restricted_claude.py" "$restricted" "${DAIMON_D_COMMAND#/}" 2>&1)"
+    [ -n "$warn" ] && log_event "$SLUG" restricted "$warn" >> "$OPLOG"
+  fi
+  export DAIMON_RESTRICTED_DIR="$restricted"
+
   local bin args stdin=""
   bin="$(backend_bin)"
   DAIMON_AGENT_SESSION="$(uuidgen | tr '[:upper:]' '[:lower:]')"
@@ -122,7 +133,7 @@ run_one_backend() {
   if [ "$mode" = "oneshot" ]; then
     tmux pipe-pane -t "$session" "cat >> '$tfile'" 2>/dev/null || true
   fi
-  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER stuck_after=$STUCK_AFTER$resume_note" >> "$OPLOG"
+  log_event "$SLUG" launch "backend=$be session=$session model=$model danger=$DANGER${DAIMON_D_TOOLS:+ tools=on} stuck_after=$STUCK_AFTER$resume_note" >> "$OPLOG"
 
   local regex booted=0 i
   regex="$(backend_ready_regex "$DANGER")"

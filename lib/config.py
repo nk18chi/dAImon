@@ -396,6 +396,8 @@ class Config:
         merged["required_inputs"] = list(ri) if isinstance(ri, list) else [ri]
         mcp = merged.get("mcp", [])
         merged["mcp"] = [mcp] if isinstance(mcp, str) else list(mcp)
+        tools = merged.get("tools", [])
+        merged["tools"] = [tools] if isinstance(tools, str) else list(tools)
         return merged
 
     def mcp_config(self, slug: str) -> dict:
@@ -612,6 +614,32 @@ def _mcp_errors(cfg: Config, slug: str) -> list[str]:
     return errors
 
 
+def _tools_errors(cfg: Config, slug: str) -> list[str]:
+    # A tools allowlist is only a restriction if every run enforces it. A codex
+    # run (primary or fallback) can't, and an empty list would quietly fall back
+    # to `danger`, so both are config errors rather than a silent widening.
+    merged = cfg.daemon(slug)
+    tools = merged["tools"]
+    if not tools:
+        declared = "tools" in cfg.raw_daemon(slug)["daemon"] or "tools" in cfg.defaults
+        return (
+            [f"{slug}: tools is empty — list at least one rule, or remove it"] if declared else []
+        )
+    errors = [
+        f"{slug}: tools allowlist is claude-only — remove {be} as backend/fallback_backend"
+        for be in cfg.backends(slug)
+        if be != "claude"
+    ]
+    if any(not isinstance(t, str) or not t.strip() for t in tools):
+        errors.append(f"{slug}: every tools rule must be a non-empty string")
+    if merged["mcp"]:
+        errors.append(
+            f"{slug}: mcp can't be combined with tools — a restricted session takes MCP "
+            f"servers only from the user-scope ones its tools rules name"
+        )
+    return errors
+
+
 def validate(cfg: Config) -> list[str]:
     errors: list[str] = []
     if cfg.source is None:
@@ -663,6 +691,7 @@ def validate(cfg: Config) -> list[str]:
         else:
             errors.extend(_required_input_errors(cfg, slug))
             errors.extend(_mcp_errors(cfg, slug))
+            errors.extend(_tools_errors(cfg, slug))
         errors.extend(_role_errors(cfg, slug))
     errors.extend(_catalog_errors(cfg))
     return errors
@@ -806,6 +835,7 @@ def daemon_schema() -> dict:
             "learning": {"type": "boolean"},
             "clean_worktrees": {"type": "string"},
             "mcp": {"type": "array", "items": {"type": "string", "enum": list(MCP_SERVERS)}},
+            "tools": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
             "required_inputs": {
                 "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
             },
@@ -840,6 +870,15 @@ def bundle_daemon_env(cfg: Config, slug: str) -> str:
         ("DAIMON_D_BASE", d["inputs"].get("base", "main")),
         ("DAIMON_D_BACKENDS", be_list),
         ("DAIMON_D_MCP", d["mcp"]),
+        # Pre-quoted shell words: rules like "Bash(git log:*)" contain spaces, and
+        # the backend splices this into the command tmux runs via `sh -c`.
+        # {{state_dir}} lets a rule scope writes to the daemon's own state.
+        (
+            "DAIMON_D_TOOLS",
+            " ".join(
+                shlex.quote(str(t).replace("{{state_dir}}", str(cfg.state_dir))) for t in d["tools"]
+            ),
+        ),
         ("DAIMON_READY_TIMEOUT", cfg.defaults["ready_timeout"]),
     ]
     pairs += [(f"DAIMON_D_MODEL_{be.upper()}", cfg.model_for(slug, be)) for be in be_list]

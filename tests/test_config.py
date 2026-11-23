@@ -369,6 +369,64 @@ class ConfigTest(unittest.TestCase):
         )
         self.assertEqual(config.Config.load().daemon("alpha")["mcp"], ["codex"])
 
+    def _alpha_with(self, extra: str):
+        write(
+            self.root / "catalog" / "alpha" / "daemon.toml",
+            f"""
+            [daemon]
+            schedule = {{ interval = 1200 }}
+            command = "/alpha"
+            {extra}
+        """,
+        )
+        return config.Config.load()
+
+    def _tools_errors(self, cfg):
+        return [e for e in config.validate(cfg) if "tools" in e]
+
+    def test_tools_absent_by_default(self):
+        self.assertEqual(self.cfg.daemon("alpha")["tools"], [])
+        self.assertEqual(self._tools_errors(self.cfg), [])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        self.assertEqual(self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"], "")
+
+    def test_tools_exported_as_shell_words_with_state_dir(self):
+        cfg = self._alpha_with('tools = ["Read", "Bash(git log:*)", "Edit(/{{state_dir}}/qa/**)"]')
+        self.assertEqual(self._tools_errors(cfg), [])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            config.main(["daemon-env", "alpha"])
+        words = self._parse_env_output(buf.getvalue())["DAIMON_D_TOOLS"]
+        self.assertEqual(
+            shlex.split(words), ["Read", "Bash(git log:*)", f"Edit(/{cfg.state_dir}/qa/**)"]
+        )
+
+    def test_tools_in_personal_settings_replace_the_daemon_list(self):
+        self._alpha_with('tools = ["Read"]')
+        write(
+            config.personal_dir() / "daemons" / "alpha.toml", '[daemon]\ntools = ["Read", "Grep"]\n'
+        )
+        self.assertEqual(config.Config.load().daemon("alpha")["tools"], ["Read", "Grep"])
+
+    def test_validate_rejects_tools_with_codex(self):
+        cfg = self._alpha_with('fallback_backend = "codex"\ntools = ["Read"]')
+        self.assertTrue(any("tools allowlist is claude-only" in e for e in self._tools_errors(cfg)))
+        cfg = self._alpha_with('backend = "codex"\ntools = ["Read"]')
+        self.assertTrue(any("tools allowlist is claude-only" in e for e in self._tools_errors(cfg)))
+
+    def test_validate_rejects_empty_tools(self):
+        # An empty list would quietly run the daemon with `danger` instead.
+        cfg = self._alpha_with("tools = []")
+        self.assertTrue(any("tools is empty" in e for e in self._tools_errors(cfg)))
+        cfg = self._alpha_with('tools = ["Read", " "]')
+        self.assertTrue(any("non-empty string" in e for e in self._tools_errors(cfg)))
+
+    def test_validate_rejects_tools_with_mcp(self):
+        cfg = self._alpha_with('mcp = ["codex"]\ntools = ["Read"]')
+        self.assertTrue(any("mcp can't be combined with tools" in e for e in config.validate(cfg)))
+
     def test_discover_memoized_and_invalidated_on_write(self):
         first = self.cfg.discover()
         self.assertIs(first, self.cfg.discover())
