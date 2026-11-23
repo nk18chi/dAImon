@@ -5,7 +5,7 @@
 <h1 align="center">dAImon</h1>
 
 <p align="center">
-  <a href="https://github.com/effekt/dAImon/actions/workflows/ci.yml"><img src="https://github.com/effekt/dAImon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/toursbylocals/dAImon/actions/workflows/ci.yml"><img src="https://github.com/toursbylocals/dAImon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
