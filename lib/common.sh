@@ -27,6 +27,7 @@ records_dir()     { echo "$DAIMON_STATE_DIR/state"; }
 state_file()      { echo "$DAIMON_STATE_DIR/state/$1.json"; }
 mcp_dir()         { echo "$DAIMON_STATE_DIR/mcp"; }
 mcp_config_file() { echo "$(mcp_dir)/$1.json"; }
+restricted_dir()  { echo "$(runtime_dir)/restricted/$1"; }
 prompts_dir()     { echo "$DAIMON_STATE_DIR/prompts"; }
 
 daemon_session_names() {  # slug -> bare legacy/single name, then backend-qualified names
@@ -40,3 +41,8 @@ ensure_state_dirs() {
 }
 
 now_epoch() { date +%s; }
+
+# initial_prompt_word <command> -> the command as one shell word, for a backend
+# that takes its first prompt on the command line. tmux runs the launch line
+# through a shell, so a resume command with spaces or quotes must stay one argv.
+initial_prompt_word() { printf '%q' "$1"; }

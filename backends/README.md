@@ -21,6 +21,21 @@ A backend must define these functions:
 Optionally, `backend_supports_resume` (returns 0) declares that the CLI can
 continue an earlier session by id; see below.
 
+Optionally, `backend_initial_prompt` (returns 0) declares that the CLI takes its
+first prompt as a trailing command-line argument. The launcher then appends the
+daemon's `command` (one shell-quoted word) to the launch line instead of waiting
+for `backend_ready_regex` and typing it, so a change to the CLI's idle-prompt text
+(which can also vary with the user's own settings) can't stop the command being
+sent. Boot is then checked only by the session still being alive after a short
+grace. `claude` declares it.
+
+Optionally, `backend_launch_check <working_dir>` returns non-zero, with the
+reason on stdout, when the CLI would stop at a start-up dialog in that folder.
+The launcher then logs `boot_fail` with the reason and doesn't start the
+session, so the run fails at once instead of waiting behind the dialog until the
+`stuck_after` reaper. `claude` uses it for its folder-trust prompt
+(`lib/claude_trust.py`: the folder's own record, else its git repository root's).
+
 ## Resuming a session
 
 A gate can ask to continue an earlier agent session instead of starting fresh, so
@@ -60,12 +75,28 @@ calling `backend_cli_args`. A backend that supports MCP should read that env var
 and pass the file to its CLI's MCP flag (empty/unset means no MCP). The `claude`
 backend maps it to `--mcp-config <file> --strict-mcp-config`.
 
+## Tool allowlist
+
+When a daemon sets `[daemon].tools`, `DAIMON_D_TOOLS` holds the rules as
+pre-quoted shell words. A backend that can enforce an allowlist should prefer it
+over the danger flag. The `claude` backend maps it to
+`--permission-mode dontAsk --setting-sources '' --settings … --mcp-config …
+--strict-mcp-config --plugin-dir … --allowedTools <rules>` and reports the
+`don't ask on` banner as ready. Loading no settings files keeps the user's own
+allow rules out too, so `lib/launch.sh` first builds `DAIMON_RESTRICTED_DIR`
+(via `lib/restricted_claude.py`): dAImon's hooks for `--settings`, the
+allowlisted user-scope MCP servers for `--mcp-config`, and the daemon's synced
+skill as a one-skill plugin so its command resolves. Backends without an
+equivalent must not be used with `tools` (config validation enforces this for
+`codex`).
+
 ## How the launcher uses them
 
 `lib/launch.sh` exports `DAIMON_SENTINEL`, `DAIMON_HEARTBEAT`, and `DAIMON_WAIT`,
-opens `tmux new-session` running `<env> exec <backend_bin> <backend_cli_args>`,
-waits for `backend_ready_regex` (or the boot delay), types the daemon's
-`command`, then blocks until: the sentinel appears (`hook` mode), the session
+opens `tmux new-session` running `<env> exec <backend_bin> <backend_cli_args>`
+(plus the daemon's `command` for a `backend_initial_prompt` backend; otherwise it
+waits for `backend_ready_regex`, or the boot delay, and types the `command`),
+then blocks until: the sentinel appears (`hook` mode), the session
 dies, or the heartbeat goes stale for `stuck_after` seconds. Teardown and the
 MCP-orphan sweep in `lib/reap.sh` are backend-independent.
 

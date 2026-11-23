@@ -61,7 +61,7 @@ requirement only once there are other collaborators. To reproduce the protection
 (nested JSON must go via `--input`; the `-f 'a[b]=c'` form does not build it):
 
 ```bash
-gh api -X PUT repos/effekt/dAImon/branches/main/protection --input - <<'JSON'
+gh api -X PUT repos/toursbylocals/dAImon/branches/main/protection --input - <<'JSON'
 {
   "required_status_checks": { "strict": true, "contexts": ["test", "lint", "conventional"] },
   "enforce_admins": false,

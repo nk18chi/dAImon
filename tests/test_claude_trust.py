@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -55,6 +56,35 @@ class ClaudeTrustTest(unittest.TestCase):
 
     def test_missing_file(self):
         self.assertFalse(claude_trust.is_trusted("/repo"))
+
+    def _git_repo(self) -> Path:
+        repo = Path(self.home, "repo").resolve()
+        (repo / "packages" / "api").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        return repo
+
+    def test_trusted_git_root_covers_a_subfolder(self):
+        # Claude asks per repository: a subfolder of a trusted repo starts with no
+        # prompt even though it has no record of its own.
+        repo = self._git_repo()
+        self._write({str(repo): {"hasTrustDialogAccepted": True}})
+        self.assertTrue(claude_trust.is_trusted(str(repo / "packages" / "api")))
+
+    def test_subfolder_own_record_wins_over_git_root(self):
+        repo = self._git_repo()
+        sub = repo / "packages"
+        self._write(
+            {
+                str(repo): {"hasTrustDialogAccepted": True},
+                str(sub): {"hasTrustDialogAccepted": False},
+            }
+        )
+        self.assertFalse(claude_trust.is_trusted(str(sub)))
+
+    def test_untrusted_git_root_does_not_cover_a_subfolder(self):
+        repo = self._git_repo()
+        self._write({str(repo): {"hasTrustDialogAccepted": False}})
+        self.assertFalse(claude_trust.is_trusted(str(repo / "packages")))
 
 
 if __name__ == "__main__":
