@@ -25,6 +25,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from restricted_claude import servers_named  # noqa: E402
+
 KINDS = ("mcp", "cli", "commands")
 PROBE_TIMEOUT = 15
 
@@ -193,6 +196,8 @@ class Checker:
                 f"MCP server '{name}' can't load: [daemon].mcp = {attached} limits the "
                 f"session to dAImon's own servers (--strict-mcp-config) — drop [daemon].mcp"
             )
+        if self.daemon["tools"]:
+            return self._restricted_mcp(name)
         if self.daemon["backend"] == "codex":
             if name in self.servers()[0]:
                 return ""
@@ -226,6 +231,22 @@ class Checker:
             f"MCP server '{name}' is not configured for {wd} — add it: "
             f"claude mcp add --scope user {name} … (or --scope local from {wd}, or {wd}/.mcp.json)"
         )
+
+    def _restricted_mcp(self, name: str) -> str:
+        # A [daemon].tools session loads no settings files: restricted_claude.py
+        # copies in only the user-scope servers its rules name, and no plugins.
+        limit = (
+            f"MCP server '{name}' can't load: [daemon].tools sessions get only "
+            f"user-scope servers their rules name"
+        )
+        if name.startswith("plugin:"):
+            return f"{limit}, never a plugin's — drop [daemon].tools or require a user-scope server"
+        fixes = []
+        if name not in _server_names(_read_json(Path.home() / ".claude.json")):
+            fixes.append(f"add it: claude mcp add --scope user {name} …")
+        if name not in servers_named(self.daemon["tools"]):
+            fixes.append(f"name it in [daemon].tools: mcp__{name}__<tool>")
+        return f"{limit} — {'; '.join(fixes)}" if fixes else ""
 
     def _cli(self, spec: dict) -> str:
         name, check, fix = spec["name"], spec["check"], spec["fix"]

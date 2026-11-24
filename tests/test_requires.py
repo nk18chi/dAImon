@@ -112,6 +112,32 @@ class McpTest(RequiresBase):
         self.declare('mcp = ["codex"]', daemon='mcp = ["codex"]')
         self.assertEqual(self.missing(), [])
 
+    def test_a_tools_daemon_gets_only_user_scope_servers_its_rules_name(self):
+        tools = 'tools = ["mcp__datadog__search_logs"]'
+        self.declare('mcp = ["datadog"]', daemon=tools)
+        self.claude_json({"projects": {str(self.wd): {"mcpServers": {"datadog": {}}}}})
+        [line] = self.missing()
+        self.assertIn("[daemon].tools", line)
+        self.assertIn("claude mcp add --scope user datadog", line)
+        self.assertNotIn("name it in", line)
+
+        self.claude_json({"mcpServers": {"datadog": {}}})
+        self.assertEqual(self.missing(), [])
+
+        self.declare('mcp = ["datadog"]', daemon='tools = ["Read"]')
+        [line] = self.missing()
+        self.assertIn("name it in [daemon].tools: mcp__datadog__<tool>", line)
+        self.assertNotIn("claude mcp add", line)
+
+    def test_a_tools_daemon_never_gets_a_plugin_server(self):
+        self.declare('mcp = ["plugin:slack:slack"]', daemon='tools = ["Read"]')
+        write(
+            self.home / ".claude" / "settings.json",
+            json.dumps({"enabledPlugins": {"slack@claude-plugins-official": True}}),
+        )
+        [line] = self.missing()
+        self.assertIn("never a plugin's", line)
+
     def test_a_codex_daemon_reads_codex_config(self):
         self.declare('mcp = ["datadog"]', daemon='backend = "codex"')
         codex = self.home / "codex"
